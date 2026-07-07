@@ -22,6 +22,8 @@ There are no tests. `GEMINI_API_KEY` must be set (see `.env.example`) or `/api/c
 
 **One Express process serves everything** (`server.ts`). In dev it mounts Vite as middleware; in prod (`NODE_ENV=production`) it serves `dist/` static + SPA fallback. Both modes expose `POST /api/chat`. This is why `dev` runs `tsx server.ts`, not the Vite CLI.
 
+**Two client routes, no router** (`src/main.tsx`): `/` renders the marketing landing page (`src/landing/`, dogfoods the same GSAP/Lenis/R3F stack and embeds `PreviewPanel` with a canned schema), `/studio` renders the studio app (`App.tsx`). Both are `React.lazy` so Vite code-splits them; navigation between them is full-page `<a href>`. The server needed no changes — SPA fallback covers both paths.
+
 **Single source of truth is `ProjectSchema`** (`src/types.ts`), held in `App.tsx` `useState`. Everything is a function of it:
 - `EditorPanel` (left) mutates it immutably via `onChange` — add/delete scenes, drag elements in, toggle transitions.
 - `PreviewPanel` (center) renders it as a scroll-driven animation.

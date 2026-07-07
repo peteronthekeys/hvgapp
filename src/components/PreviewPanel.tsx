@@ -10,6 +10,8 @@ import type Lenis from 'lenis';
 
 interface PreviewPanelProps {
   schema: ProjectSchema;
+  /** True when mounted inside the marketing page's demo frame: hides dev-only chrome (Leva). */
+  embedded?: boolean;
 }
 
 // Normalized scroll progress shared by the R3F (cube) layer. Fed by the same
@@ -274,7 +276,7 @@ function ScenePostProcessing({ polishControls }: { polishControls: ScenePolishCo
   );
 }
 
-export function PreviewPanel({ schema }: PreviewPanelProps) {
+export function PreviewPanel({ schema, embedded = false }: PreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef({ current: 0 });
@@ -411,7 +413,7 @@ export function PreviewPanel({ schema }: PreviewPanelProps) {
         </Canvas>
       </div>
 
-      {DevLevaControls && (
+      {!embedded && DevLevaControls && (
         <Suspense fallback={null}>
           <DevLevaControls values={polishControls} onChange={setPolishControls} />
         </Suspense>

@@ -6,7 +6,7 @@ UI components for editing, previewing, and AI-updating the animation schema.
 
 ## Ownership
 
-- `PreviewPanel.tsx` is the animation engine home: GSAP plus Lenis for DOM text, `ScrollProgressContext` for R3F elements, and postprocessing polish.
+- `PreviewPanel.tsx` is the animation engine home: GSAP plus Lenis for DOM text, `ScrollProgressContext` for R3F elements, and postprocessing polish. It accepts an additive `embedded` prop (default false) used by the landing page's LiveDemo section to suppress dev-only Leva chrome; keep new props additive so the studio path never changes behavior.
 - `EditorPanel.tsx`, `SceneEditor.tsx`, and `ElementEditor.tsx` create and edit schema elements.
 - `ChatPanel.tsx` sends schema updates through the server-side AI loop.
 

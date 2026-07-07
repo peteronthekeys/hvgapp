@@ -1,11 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Syne:wght@700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* Landing-page display face; studio UI stays on --font-sans */
+  --font-display: "Syne", var(--font-sans);
 }
 
 body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  background-color: #020617; /* slate-950 — no white flash behind the landing canvas */
 }
