@@ -9,6 +9,12 @@ interface ElementEditorProps {
 }
 
 export function ElementEditor({ element, onChange, onDelete }: ElementEditorProps) {
+  const elementLabel = element.type === 'text'
+    ? 'Text Block'
+    : element.type === 'glbObject'
+      ? 'GLB Object'
+      : '3D Cube';
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
     let parsedValue: string | number = value;
@@ -28,7 +34,7 @@ export function ElementEditor({ element, onChange, onDelete }: ElementEditorProp
     <div className="border border-slate-700 bg-slate-800/50 backdrop-blur-sm p-4 mb-3 relative">
       <div className="flex justify-between items-center mb-4">
         <h4 className="text-sm font-semibold tracking-wide text-emerald-400 uppercase">
-          {element.type === 'text' ? 'Text Block' : '3D Cube'}
+          {elementLabel}
         </h4>
         <button
           onClick={onDelete}
@@ -47,6 +53,19 @@ export function ElementEditor({ element, onChange, onDelete }: ElementEditorProp
               type="text"
               name="content"
               value={element.content}
+              onChange={handleChange}
+              className="w-full bg-slate-900 border border-slate-700 p-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none transition-colors"
+            />
+          </div>
+        )}
+
+        {element.type === 'glbObject' && (
+          <div className="col-span-2">
+            <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wider">Model Path</label>
+            <input
+              type="text"
+              name="modelPath"
+              value={element.modelPath}
               onChange={handleChange}
               className="w-full bg-slate-900 border border-slate-700 p-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none transition-colors"
             />

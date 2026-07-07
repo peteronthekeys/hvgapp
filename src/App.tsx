@@ -69,6 +69,8 @@ export default function App() {
     { id: 'sound', icon: Music, label: 'Sounds' }
   ];
 
+  const getAssetDropType = (id: string) => id === 'object' ? 'glbObject' : id;
+
   const startResizeEditor = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -125,7 +127,7 @@ export default function App() {
             <button 
               key={id}
               draggable
-              onDragStart={(e) => { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'copy'; }}
+              onDragStart={(e) => { e.dataTransfer.setData('text/plain', getAssetDropType(id)); e.dataTransfer.effectAllowed = 'copy'; }}
               onClick={() => setActiveAssetTab(activeAssetTab === id ? null : id)}
               className={`text-slate-400 hover:text-teal-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-slate-800 cursor-grab ${activeAssetTab === id ? 'bg-slate-800 text-teal-400' : ''}`}
               title={label}
@@ -205,14 +207,16 @@ export default function App() {
         <div className="h-24 border-b border-slate-800 bg-slate-900/90 flex shrink-0 z-30 relative shadow-md">
           {activeAssetTab && (
             <div className={`flex items-center px-4 gap-4 overflow-x-auto ${activeResourceTab ? 'w-1/2 border-r border-slate-800' : 'w-full'}`}>
-              {Array.from({ length: 15 }).map((_, i) => (
+              {Array.from({ length: activeAssetTab === 'object' ? 1 : 15 }).map((_, i) => (
                 <div 
                   key={`asset-${i}`} 
                   draggable
-                  onDragStart={(e) => { e.dataTransfer.setData('text/plain', activeAssetTab); e.dataTransfer.effectAllowed = 'copy'; }}
+                  onDragStart={(e) => { e.dataTransfer.setData('text/plain', getAssetDropType(activeAssetTab)); e.dataTransfer.effectAllowed = 'copy'; }}
                   className="h-16 w-16 bg-slate-800 border border-slate-700 hover:border-teal-500 rounded flex-shrink-0 cursor-grab transition-colors flex items-center justify-center relative overflow-hidden group"
                 >
-                  <span className="text-slate-500 text-xs font-mono group-hover:text-teal-400">{activeAssetTab.substring(0, 3).toUpperCase()}{i + 1}</span>
+                  <span className="text-slate-500 text-xs font-mono group-hover:text-teal-400">
+                    {activeAssetTab === 'object' ? 'GLB' : `${activeAssetTab.substring(0, 3).toUpperCase()}${i + 1}`}
+                  </span>
                 </div>
               ))}
             </div>
@@ -277,4 +281,3 @@ export default function App() {
     </div>
   );
 }
-

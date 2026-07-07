@@ -1,7 +1,7 @@
-import React, { useRef, useMemo, useEffect, useState, useCallback } from 'react';
-import { ProjectSchema, SceneElement } from '../types';
+import React, { Suspense, useRef, useMemo, useEffect, useState, useCallback } from 'react';
+import { ProjectSchema, SceneElement, TextElement, CubeElement, GlbObjectElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../types';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Environment, Lightformer } from '@react-three/drei';
+import { Clone, Environment, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import type gsapType from 'gsap';
 import type { ScrollTrigger as ScrollTriggerType } from 'gsap/ScrollTrigger';
@@ -15,6 +15,32 @@ interface PreviewPanelProps {
 // Lenis instance that drives the shared scroll container, so both engines
 // read from one scroll model instead of the cube layer polling raw scrollTop.
 const ScrollProgressContext = React.createContext<{ current: number }>({ current: 0 });
+
+const isTextElement = (element: SceneElement): element is TextElement => element.type === 'text';
+const isCubeElement = (element: SceneElement): element is CubeElement => element.type === 'cube';
+const isGlbObjectElement = (element: SceneElement): element is GlbObjectElement => element.type === 'glbObject';
+
+const getElementProgress = (
+  element: SceneElement,
+  scrollProgress: number,
+  viewportHeight: number,
+  sceneStartVh: number,
+  sceneHeightVh: number
+) => {
+  const normalizedOffsetPx = scrollProgress * viewportHeight;
+  const sceneStartPx = (sceneStartVh / 100) * viewportHeight;
+  const sceneHeightPx = (sceneHeightVh / 100) * viewportHeight;
+
+  const elStartPx = sceneStartPx + element.start * sceneHeightPx;
+  const elEndPx = sceneStartPx + element.end * sceneHeightPx;
+
+  let progress = 0;
+  if (elEndPx > elStartPx) {
+    progress = (normalizedOffsetPx - elStartPx) / (elEndPx - elStartPx);
+  }
+
+  return Math.max(0, Math.min(1, progress));
+};
 
 function TextElementView({
   element,
@@ -79,7 +105,7 @@ function CubeElementView({
   sceneStartVh,
   sceneHeightVh,
 }: {
-  element: SceneElement;
+  element: CubeElement;
   sceneStartVh: number;
   sceneHeightVh: number;
 }) {
@@ -90,20 +116,7 @@ function CubeElementView({
   useFrame(({ size }) => {
     if (!meshRef.current || !materialRef.current) return;
 
-    const vh = size.height;
-    const scrollTop = progressRef.current * vh; // normalized offset -> px, same units as before
-
-    const sceneStartPx = (sceneStartVh / 100) * vh;
-    const sceneHeightPx = (sceneHeightVh / 100) * vh;
-
-    const elStartPx = sceneStartPx + element.start * sceneHeightPx;
-    const elEndPx = sceneStartPx + element.end * sceneHeightPx;
-
-    let progress = 0;
-    if (elEndPx > elStartPx) {
-      progress = (scrollTop - elStartPx) / (elEndPx - elStartPx);
-    }
-    progress = Math.max(0, Math.min(1, progress));
+    const progress = getElementProgress(element, progressRef.current, size.height, sceneStartVh, sceneHeightVh);
 
     meshRef.current.rotation.x = progress * Math.PI * 2;
     meshRef.current.rotation.y = progress * Math.PI * 2;
@@ -128,6 +141,50 @@ function CubeElementView({
     </mesh>
   );
 }
+
+function GlbObjectElementView({
+  element,
+  sceneStartVh,
+  sceneHeightVh,
+}: {
+  element: GlbObjectElement;
+  sceneStartVh: number;
+  sceneHeightVh: number;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  const progressRef = React.useContext(ScrollProgressContext);
+  const gltf = useGLTF(element.modelPath || DEFAULT_GLB_OBJECT_MODEL_PATH);
+
+  useFrame(({ size }) => {
+    if (!groupRef.current) return;
+
+    const progress = getElementProgress(element, progressRef.current, size.height, sceneStartVh, sceneHeightVh);
+    const currentY = element.startY + (element.endY - element.startY) * progress;
+    const currentOpacity = element.startOpacity + (element.endOpacity - element.startOpacity) * progress;
+
+    groupRef.current.position.y = currentY / -50;
+    groupRef.current.rotation.x = progress * Math.PI * 0.5;
+    groupRef.current.rotation.y = progress * Math.PI * 2;
+
+    groupRef.current.traverse(child => {
+      if (!(child instanceof THREE.Mesh)) return;
+
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.forEach(material => {
+        material.transparent = true;
+        material.opacity = currentOpacity;
+      });
+    });
+  });
+
+  return (
+    <group ref={groupRef} scale={1.35}>
+      <Clone object={gltf.scene} />
+    </group>
+  );
+}
+
+useGLTF.preload(DEFAULT_GLB_OBJECT_MODEL_PATH);
 
 export function PreviewPanel({ schema }: PreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -234,7 +291,7 @@ export function PreviewPanel({ schema }: PreviewPanelProps) {
           <ScrollProgressContext.Provider value={scrollProgressRef.current}>
             {sceneLayouts.map(scene =>
               scene.elements
-                .filter(el => el.type === 'cube')
+                .filter(isCubeElement)
                 .map(el => (
                   <CubeElementView
                     key={el.id}
@@ -244,6 +301,20 @@ export function PreviewPanel({ schema }: PreviewPanelProps) {
                   />
                 ))
             )}
+            <Suspense fallback={null}>
+              {sceneLayouts.map(scene =>
+                scene.elements
+                  .filter(isGlbObjectElement)
+                  .map(el => (
+                    <GlbObjectElementView
+                      key={el.id}
+                      element={el}
+                      sceneStartVh={scene.startVh}
+                      sceneHeightVh={scene.height}
+                    />
+                  ))
+              )}
+            </Suspense>
           </ScrollProgressContext.Provider>
         </Canvas>
       </div>
@@ -320,7 +391,7 @@ function SceneDOMObserver({
 
   return (
     <div ref={ref} className="absolute inset-0 overflow-hidden pointer-events-none">
-      {layout.heightPx > 0 && scene.elements.map(el => (
+      {layout.heightPx > 0 && scene.elements.filter(isTextElement).map(el => (
         <TextElementView
           key={el.id}
           element={el}

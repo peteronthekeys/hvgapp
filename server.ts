@@ -41,8 +41,9 @@ async function startServer() {
                       type: Type.OBJECT,
                       properties: {
                         id: { type: Type.STRING },
-                        type: { type: Type.STRING, enum: ["text", "cube"] },
+                        type: { type: Type.STRING, enum: ["text", "cube", "glbObject"] },
                         content: { type: Type.STRING },
+                        modelPath: { type: Type.STRING },
                         start: { type: Type.NUMBER },
                         end: { type: Type.NUMBER },
                         startY: { type: Type.NUMBER },
@@ -71,8 +72,9 @@ Rules:
 1. Whenever the user wants to add, edit, or delete scenes or elements, you MUST use the updateSchema function call to apply the changes.
 2. Provide a short, friendly text response explaining what you did.
 3. If they just ask a question, answer it.
-4. The only element types you may use are "text" (a "Text Block") and "cube" (a "3D Cube") — these are the only types that render in the preview. Never emit any other type value.
+4. The only element types you may use are "text" (a "Text Block"), "cube" (a "3D Cube"), and "glbObject" (a GLB-backed 3D object loaded from modelPath) — these are the only types that render in the preview. Never emit any other type value.
 5. If creating new elements, give them a unique UUID for the id.
+6. For a glbObject, include modelPath. Use "/models/scroll-orb.glb" unless the user provides a different GLB path.
 `;
 
       const formattedHistory = history.map((msg: any) => ({

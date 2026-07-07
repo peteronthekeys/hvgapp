@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProjectSchema, Scene, ElementType } from '../types';
+import { ProjectSchema, Scene, SceneElement, ElementType, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../types';
 import { Plus, Type, Box, MoveVertical, Layout, Trash2, Mountain, Users, Activity, Wind, Component } from 'lucide-react';
 
 interface EditorPanelProps {
@@ -13,6 +13,7 @@ const getElementIcon = (type: ElementType) => {
   switch (type) {
     case 'text': return <Type size={12} />;
     case 'cube': return <Box size={12} />;
+    case 'glbObject': return <Box size={12} />;
     case 'environment': return <Mountain size={12} />;
     case 'object': return <Box size={12} />;
     case 'character': return <Users size={12} />;
@@ -22,6 +23,34 @@ const getElementIcon = (type: ElementType) => {
     case 'component': return <Component size={12} />;
     default: return <Layout size={12} />;
   }
+};
+
+const elementTypes: ElementType[] = ['text', 'cube', 'glbObject', 'environment', 'object', 'character', 'action', 'motion', 'font', 'component'];
+
+const isElementType = (value: string): value is ElementType => {
+  return elementTypes.includes(value as ElementType);
+};
+
+const createElement = (type: ElementType): SceneElement => {
+  if (type === 'text') {
+    return { id: crypto.randomUUID(), type: 'text', content: 'New Text', start: 0, end: 1, startY: 100, endY: 0, startOpacity: 0, endOpacity: 1 };
+  }
+
+  if (type === 'glbObject') {
+    return {
+      id: crypto.randomUUID(),
+      type: 'glbObject',
+      modelPath: DEFAULT_GLB_OBJECT_MODEL_PATH,
+      start: 0,
+      end: 1,
+      startY: 100,
+      endY: -100,
+      startOpacity: 0,
+      endOpacity: 1,
+    };
+  }
+
+  return { id: crypto.randomUUID(), type, start: 0, end: 1, startY: 100, endY: -100, startOpacity: 0, endOpacity: 1 };
 };
 
 export function EditorPanel({ schema, onChange, onCollapse, isCollapsed = false }: EditorPanelProps) {
@@ -62,19 +91,17 @@ export function EditorPanel({ schema, onChange, onCollapse, isCollapsed = false 
 
   const handleDrop = (e: React.DragEvent, sceneId: string) => {
     e.preventDefault();
-    const type = e.dataTransfer.getData('text/plain') as ElementType;
-    if (type) {
+    const type = e.dataTransfer.getData('text/plain');
+    if (isElementType(type)) {
       const sceneIndex = schema.scenes.findIndex(s => s.id === sceneId);
       if (sceneIndex !== -1) {
         const scene = schema.scenes[sceneIndex];
-        const newElement = type === 'text' 
-          ? { id: crypto.randomUUID(), type: 'text', content: 'New Text', start: 0, end: 1, startY: 100, endY: 0, startOpacity: 0, endOpacity: 1 }
-          : { id: crypto.randomUUID(), type: type, start: 0, end: 1, startY: 100, endY: -100, startOpacity: 0, endOpacity: 1 };
+        const newElement = createElement(type);
         
         const newScenes = [...schema.scenes];
         newScenes[sceneIndex] = {
           ...scene,
-          elements: [...scene.elements, newElement as any]
+          elements: [...scene.elements, newElement]
         };
         
         onChange({
