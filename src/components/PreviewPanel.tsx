@@ -2,6 +2,7 @@ import React, { Suspense, useRef, useMemo, useEffect, useState, useCallback } fr
 import { ProjectSchema, SceneElement, TextElement, CubeElement, GlbObjectElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../types';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Clone, Environment, useGLTF } from '@react-three/drei';
+import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import type gsapType from 'gsap';
 import type { ScrollTrigger as ScrollTriggerType } from 'gsap/ScrollTrigger';
@@ -16,9 +17,78 @@ interface PreviewPanelProps {
 // read from one scroll model instead of the cube layer polling raw scrollTop.
 const ScrollProgressContext = React.createContext<{ current: number }>({ current: 0 });
 
+type ScenePolishControls = {
+  bloomIntensity: number;
+  bloomLuminanceThreshold: number;
+  vignetteDarkness: number;
+  cubeRotationTurns: number;
+  glbRotationTurns: number;
+  glbScale: number;
+};
+
+const DEFAULT_POLISH_CONTROLS: ScenePolishControls = {
+  bloomIntensity: 0.22,
+  bloomLuminanceThreshold: 0.28,
+  vignetteDarkness: 0.14,
+  cubeRotationTurns: 1,
+  glbRotationTurns: 1,
+  glbScale: 1.35,
+};
+
 const isTextElement = (element: SceneElement): element is TextElement => element.type === 'text';
 const isCubeElement = (element: SceneElement): element is CubeElement => element.type === 'cube';
 const isGlbObjectElement = (element: SceneElement): element is GlbObjectElement => element.type === 'glbObject';
+
+type DevLevaControlsProps = {
+  values: ScenePolishControls;
+  onChange: React.Dispatch<React.SetStateAction<ScenePolishControls>>;
+};
+
+const DevLevaControls = import.meta.env.DEV
+  ? React.lazy(async () => {
+      const { Leva, useControls } = await import('leva');
+
+      function DevLevaControlsPanel({ values, onChange }: DevLevaControlsProps) {
+        const controls = useControls('R3F Polish', {
+          bloomIntensity: { value: values.bloomIntensity, min: 0, max: 0.75, step: 0.01 },
+          bloomLuminanceThreshold: { value: values.bloomLuminanceThreshold, min: 0, max: 0.8, step: 0.01 },
+          vignetteDarkness: { value: values.vignetteDarkness, min: 0, max: 0.5, step: 0.01 },
+          cubeRotationTurns: { value: values.cubeRotationTurns, min: 0, max: 2, step: 0.05 },
+          glbRotationTurns: { value: values.glbRotationTurns, min: 0, max: 2, step: 0.05 },
+          glbScale: { value: values.glbScale, min: 0.5, max: 2.5, step: 0.05 },
+        });
+
+        useEffect(() => {
+          onChange(previous => {
+            const next = controls as ScenePolishControls;
+            if (
+              previous.bloomIntensity === next.bloomIntensity &&
+              previous.bloomLuminanceThreshold === next.bloomLuminanceThreshold &&
+              previous.vignetteDarkness === next.vignetteDarkness &&
+              previous.cubeRotationTurns === next.cubeRotationTurns &&
+              previous.glbRotationTurns === next.glbRotationTurns &&
+              previous.glbScale === next.glbScale
+            ) {
+              return previous;
+            }
+            return next;
+          });
+        }, [
+          controls.bloomIntensity,
+          controls.bloomLuminanceThreshold,
+          controls.vignetteDarkness,
+          controls.cubeRotationTurns,
+          controls.glbRotationTurns,
+          controls.glbScale,
+          onChange,
+        ]);
+
+        return <Leva collapsed oneLineLabels />;
+      }
+
+      return { default: DevLevaControlsPanel };
+    })
+  : null;
 
 const getElementProgress = (
   element: SceneElement,
@@ -104,10 +174,12 @@ function CubeElementView({
   element,
   sceneStartVh,
   sceneHeightVh,
+  polishControls,
 }: {
   element: CubeElement;
   sceneStartVh: number;
   sceneHeightVh: number;
+  polishControls: ScenePolishControls;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
@@ -118,8 +190,8 @@ function CubeElementView({
 
     const progress = getElementProgress(element, progressRef.current, size.height, sceneStartVh, sceneHeightVh);
 
-    meshRef.current.rotation.x = progress * Math.PI * 2;
-    meshRef.current.rotation.y = progress * Math.PI * 2;
+    meshRef.current.rotation.x = progress * Math.PI * 2 * polishControls.cubeRotationTurns;
+    meshRef.current.rotation.y = progress * Math.PI * 2 * polishControls.cubeRotationTurns;
 
     const currentY = element.startY + (element.endY - element.startY) * progress;
     meshRef.current.position.y = currentY / -50;
@@ -146,10 +218,12 @@ function GlbObjectElementView({
   element,
   sceneStartVh,
   sceneHeightVh,
+  polishControls,
 }: {
   element: GlbObjectElement;
   sceneStartVh: number;
   sceneHeightVh: number;
+  polishControls: ScenePolishControls;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const progressRef = React.useContext(ScrollProgressContext);
@@ -164,7 +238,7 @@ function GlbObjectElementView({
 
     groupRef.current.position.y = currentY / -50;
     groupRef.current.rotation.x = progress * Math.PI * 0.5;
-    groupRef.current.rotation.y = progress * Math.PI * 2;
+    groupRef.current.rotation.y = progress * Math.PI * 2 * polishControls.glbRotationTurns;
 
     groupRef.current.traverse(child => {
       if (!(child instanceof THREE.Mesh)) return;
@@ -178,7 +252,7 @@ function GlbObjectElementView({
   });
 
   return (
-    <group ref={groupRef} scale={1.35}>
+    <group ref={groupRef} scale={polishControls.glbScale}>
       <Clone object={gltf.scene} />
     </group>
   );
@@ -186,10 +260,25 @@ function GlbObjectElementView({
 
 useGLTF.preload(DEFAULT_GLB_OBJECT_MODEL_PATH);
 
+function ScenePostProcessing({ polishControls }: { polishControls: ScenePolishControls }) {
+  return (
+    <EffectComposer multisampling={0} resolutionScale={0.75}>
+      <Bloom
+        intensity={polishControls.bloomIntensity}
+        luminanceThreshold={polishControls.bloomLuminanceThreshold}
+        luminanceSmoothing={0.45}
+        mipmapBlur
+      />
+      <Vignette offset={0.22} darkness={polishControls.vignetteDarkness} />
+    </EffectComposer>
+  );
+}
+
 export function PreviewPanel({ schema }: PreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef({ current: 0 });
+  const [polishControls, setPolishControls] = useState<ScenePolishControls>(DEFAULT_POLISH_CONTROLS);
 
   const [engines, setEngines] = useState<{
     gsapInstance: typeof gsapType;
@@ -298,6 +387,7 @@ export function PreviewPanel({ schema }: PreviewPanelProps) {
                     element={el}
                     sceneStartVh={scene.startVh}
                     sceneHeightVh={scene.height}
+                    polishControls={polishControls}
                   />
                 ))
             )}
@@ -311,13 +401,21 @@ export function PreviewPanel({ schema }: PreviewPanelProps) {
                       element={el}
                       sceneStartVh={scene.startVh}
                       sceneHeightVh={scene.height}
+                      polishControls={polishControls}
                     />
                   ))
               )}
             </Suspense>
           </ScrollProgressContext.Provider>
+          <ScenePostProcessing polishControls={polishControls} />
         </Canvas>
       </div>
+
+      {DevLevaControls && (
+        <Suspense fallback={null}>
+          <DevLevaControls values={polishControls} onChange={setPolishControls} />
+        </Suspense>
+      )}
 
       {/* Scrollable Content Layer */}
       <div
