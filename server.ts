@@ -41,7 +41,7 @@ async function startServer() {
                       type: Type.OBJECT,
                       properties: {
                         id: { type: Type.STRING },
-                        type: { type: Type.STRING },
+                        type: { type: Type.STRING, enum: ["text", "cube"] },
                         content: { type: Type.STRING },
                         start: { type: Type.NUMBER },
                         end: { type: Type.NUMBER },
@@ -71,7 +71,7 @@ Rules:
 1. Whenever the user wants to add, edit, or delete scenes or elements, you MUST use the updateSchema function call to apply the changes.
 2. Provide a short, friendly text response explaining what you did.
 3. If they just ask a question, answer it.
-4. "Text Block" type is "text", "3D Cube" type is "cube". Wait, the schema uses 'text' or 'cube' for the type property.
+4. The only element types you may use are "text" (a "Text Block") and "cube" (a "3D Cube") — these are the only types that render in the preview. Never emit any other type value.
 5. If creating new elements, give them a unique UUID for the id.
 `;
 
