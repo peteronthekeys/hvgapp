@@ -377,7 +377,12 @@ export function PreviewPanel({ schema, embedded = false }: PreviewPanelProps) {
         <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
           <ambientLight intensity={0.5} />
           <directionalLight position={[10, 10, 5]} intensity={1} />
-          <Environment preset="city" />
+          {/* Environment suspends while its CDN HDR loads; without this boundary
+              the suspension escalates to the app-level route fallback and blanks
+              the whole studio on any re-render. */}
+          <Suspense fallback={null}>
+            <Environment preset="city" />
+          </Suspense>
 
           <ScrollProgressContext.Provider value={scrollProgressRef.current}>
             {sceneLayouts.map(scene =>
