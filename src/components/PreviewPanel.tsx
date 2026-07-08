@@ -1,4 +1,4 @@
-import React, { Suspense, useRef, useMemo, useEffect, useState, useCallback } from 'react';
+import React, { Suspense, useRef, useMemo, useEffect, useState, useCallback, useImperativeHandle } from 'react';
 import { ProjectSchema, SceneElement, TextElement, CubeElement, GlbObjectElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../types';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Clone, Environment, useGLTF } from '@react-three/drei';
@@ -8,10 +8,23 @@ import type gsapType from 'gsap';
 import type { ScrollTrigger as ScrollTriggerType } from 'gsap/ScrollTrigger';
 import type Lenis from 'lenis';
 
+export interface PreviewPlaybackHandle {
+  /** Scroll from current position to the end over durationSec; resolves on arrival or stop(). */
+  play(durationSec: number): Promise<void>;
+  /** Jump instantly to normalized progress [0,1]. */
+  seek(progress01: number): void;
+  /** Cancel an in-flight play(); its promise resolves. */
+  stop(): void;
+  /** Total scrollable px (lenis.limit); 0 until layout settles. */
+  getScrollLimitPx(): number;
+}
+
 interface PreviewPanelProps {
   schema: ProjectSchema;
   /** True when mounted inside the marketing page's demo frame: hides dev-only chrome (Leva). */
   embedded?: boolean;
+  /** Imperative playback controls (play/seek/stop) for the navbar transport, driven by the shared Lenis instance. */
+  playbackRef?: React.Ref<PreviewPlaybackHandle>;
 }
 
 // Normalized scroll progress shared by the R3F (cube) layer. Fed by the same
@@ -276,10 +289,12 @@ function ScenePostProcessing({ polishControls }: { polishControls: ScenePolishCo
   );
 }
 
-export function PreviewPanel({ schema, embedded = false }: PreviewPanelProps) {
+export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef({ current: 0 });
+  const lenisRef = useRef<Lenis | null>(null);
+  const pendingPlayResolveRef = useRef<(() => void) | null>(null);
   const [polishControls, setPolishControls] = useState<ScenePolishControls>(DEFAULT_POLISH_CONTROLS);
 
   const [engines, setEngines] = useState<{
@@ -321,6 +336,7 @@ export function PreviewPanel({ schema, embedded = false }: PreviewPanelProps) {
         wrapper: container,
         content: contentRef.current ?? undefined,
       });
+      lenisRef.current = lenis;
 
       lenis.on('scroll', () => {
         scrollTrigger.update();
@@ -357,8 +373,57 @@ export function PreviewPanel({ schema, embedded = false }: PreviewPanelProps) {
     return () => {
       if (rafCallback) gsapInstance.ticker.remove(rafCallback);
       lenis?.destroy();
+      lenisRef.current = null;
+      pendingPlayResolveRef.current?.();
+      pendingPlayResolveRef.current = null;
     };
   }, [engines]);
+
+  useImperativeHandle(
+    playbackRef,
+    () => ({
+      play(durationSec: number) {
+        return new Promise<void>(resolve => {
+          const lenis = lenisRef.current;
+          if (!lenis || lenis.limit <= 0) {
+            resolve();
+            return;
+          }
+          // A play() already in flight resolves rather than dangling.
+          pendingPlayResolveRef.current?.();
+          pendingPlayResolveRef.current = resolve;
+          lenis.scrollTo(lenis.limit, {
+            duration: durationSec,
+            easing: (t: number) => t,
+            lock: true,
+            onComplete: () => {
+              pendingPlayResolveRef.current?.();
+              pendingPlayResolveRef.current = null;
+            },
+          });
+        });
+      },
+      seek(progress01: number) {
+        const lenis = lenisRef.current;
+        if (!lenis) return;
+        const clamped = Math.max(0, Math.min(1, progress01));
+        lenis.scrollTo(clamped * lenis.limit, { immediate: true });
+      },
+      stop() {
+        const lenis = lenisRef.current;
+        if (lenis) {
+          lenis.stop();
+          lenis.start();
+        }
+        pendingPlayResolveRef.current?.();
+        pendingPlayResolveRef.current = null;
+      },
+      getScrollLimitPx() {
+        return lenisRef.current?.limit ?? 0;
+      },
+    }),
+    []
+  );
 
   // Calculate cumulative heights to know where each scene starts
   const sceneLayouts = useMemo(() => {
