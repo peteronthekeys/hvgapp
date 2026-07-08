@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ProjectSchema } from './types';
 import { EditorPanel } from './components/EditorPanel';
-import { PreviewPanel } from './components/PreviewPanel';
+import { PreviewPanel, PreviewPlaybackHandle } from './components/PreviewPanel';
 import { ChatPanel } from './components/ChatPanel';
 import { PanelLeftOpen, PanelRightOpen, PanelLeftClose, PanelRightClose, Mountain, Box, Users, Activity, Wind, Type, Component, Play, StepBack, StepForward, Image as ImageIcon, Video, Link, FileText, Music } from 'lucide-react';
 
@@ -50,6 +50,9 @@ export default function App() {
   const [isChatExpanded, setIsChatExpanded] = useState(true);
   const [activeAssetTab, setActiveAssetTab] = useState<string | null>(null);
   const [activeResourceTab, setActiveResourceTab] = useState<string | null>(null);
+  const [scrub, setScrub] = useState(1);
+  const [fps, setFps] = useState(30);
+  const studioPlaybackRef = useRef<PreviewPlaybackHandle | null>(null);
 
   const assetTypes = [
     { id: 'environment', icon: Mountain, label: 'Environments' },
@@ -70,6 +73,17 @@ export default function App() {
   ];
 
   const getAssetDropType = (id: string) => id === 'object' ? 'glbObject' : id;
+
+  const seekToFrame = (frame: number) => {
+    studioPlaybackRef.current?.seek((frame - 1) / 999);
+  };
+
+  const stepFrame = (direction: 1 | -1) => {
+    const step = Math.max(1, Math.round(1000 / (fps * 8)));
+    const next = Math.min(1000, Math.max(1, scrub + direction * step));
+    setScrub(next);
+    seekToFrame(next);
+  };
 
   const startResizeEditor = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -143,22 +157,27 @@ export default function App() {
             <Play size={16} fill="currentColor" />
           </button>
           
-          <button className="text-slate-400 hover:text-teal-400 transition-colors flex items-center justify-center w-8 h-8 shrink-0 rounded hover:bg-slate-800" title="Previous Frame">
+          <button onClick={() => stepFrame(-1)} className="text-slate-400 hover:text-teal-400 transition-colors flex items-center justify-center w-8 h-8 shrink-0 rounded hover:bg-slate-800" title="Previous Frame">
             <StepBack size={14} />
           </button>
 
           <div className="flex-1 flex items-center px-2">
-            <input 
-              type="range" 
-              min="1" 
-              max="1000" 
-              defaultValue="1"
+            <input
+              type="range"
+              min="1"
+              max="1000"
+              value={scrub}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                setScrub(value);
+                seekToFrame(value);
+              }}
               className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-500"
               title="Frame Slider"
             />
           </div>
 
-          <button className="text-slate-400 hover:text-teal-400 transition-colors flex items-center justify-center w-8 h-8 shrink-0 rounded hover:bg-slate-800" title="Next Frame">
+          <button onClick={() => stepFrame(1)} className="text-slate-400 hover:text-teal-400 transition-colors flex items-center justify-center w-8 h-8 shrink-0 rounded hover:bg-slate-800" title="Next Frame">
             <StepForward size={14} />
           </button>
 
@@ -167,7 +186,11 @@ export default function App() {
               type="number"
               min="1"
               max="120"
-              defaultValue="30"
+              value={fps}
+              onChange={(e) => {
+                const parsed = parseInt(e.target.value, 10);
+                setFps(Number.isNaN(parsed) ? 30 : Math.min(120, Math.max(1, parsed)));
+              }}
               className="w-10 bg-transparent text-xs text-slate-300 text-right focus:outline-none focus:text-teal-400 font-mono"
               title="FPS"
             />
@@ -261,7 +284,7 @@ export default function App() {
 
         {/* Preview Column */}
         <div className="flex-1 relative z-10 min-w-0 h-full">
-          <PreviewPanel schema={schema} />
+          <PreviewPanel schema={schema} playbackRef={studioPlaybackRef} />
         </div>
 
         {/* Chat Column */}
