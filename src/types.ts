@@ -1,5 +1,9 @@
 export const DEFAULT_GLB_OBJECT_MODEL_PATH = '/models/scroll-orb.glb';
 
+// Bump when ProjectSchema's shape changes; migrateSchema (src/schema/migrate.ts)
+// upgrades older/malformed schemas to this version on load.
+export const SCHEMA_VERSION = 2;
+
 // 'text', 'cube', and 'glbObject' are the only types with a real renderer (see PreviewPanel.tsx)
 // and the only types the AI can emit (see server.ts updateSchema). The rest are
 // editor-only placeholders: creatable/draggable in EditorPanel.tsx but invisible
@@ -46,5 +50,6 @@ export interface Scene {
 }
 
 export interface ProjectSchema {
+  version?: number;
   scenes: Scene[];
 }

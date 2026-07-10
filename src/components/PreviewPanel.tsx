@@ -1,12 +1,13 @@
 import React, { Suspense, useRef, useMemo, useEffect, useState, useCallback, useImperativeHandle } from 'react';
-import { ProjectSchema, SceneElement, TextElement, CubeElement, GlbObjectElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../types';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { Clone, Environment, useGLTF } from '@react-three/drei';
+import { ProjectSchema, SceneElement } from '../types';
+import { Canvas } from '@react-three/fiber';
+import { Environment } from '@react-three/drei';
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
-import * as THREE from 'three';
 import type gsapType from 'gsap';
 import type { ScrollTrigger as ScrollTriggerType } from 'gsap/ScrollTrigger';
 import type Lenis from 'lenis';
+import { ScrollProgressContext } from './elements/progress';
+import { elementRegistry, ScenePolishControls, DEFAULT_POLISH_CONTROLS } from './elements/registry';
 
 export interface PreviewPlaybackHandle {
   /** Scroll from current position to the end over durationSec; resolves on arrival or stop(). */
@@ -26,33 +27,6 @@ interface PreviewPanelProps {
   /** Imperative playback controls (play/seek/stop) for the navbar transport, driven by the shared Lenis instance. */
   playbackRef?: React.Ref<PreviewPlaybackHandle>;
 }
-
-// Normalized scroll progress shared by the R3F (cube) layer. Fed by the same
-// Lenis instance that drives the shared scroll container, so both engines
-// read from one scroll model instead of the cube layer polling raw scrollTop.
-const ScrollProgressContext = React.createContext<{ current: number }>({ current: 0 });
-
-type ScenePolishControls = {
-  bloomIntensity: number;
-  bloomLuminanceThreshold: number;
-  vignetteDarkness: number;
-  cubeRotationTurns: number;
-  glbRotationTurns: number;
-  glbScale: number;
-};
-
-const DEFAULT_POLISH_CONTROLS: ScenePolishControls = {
-  bloomIntensity: 0.22,
-  bloomLuminanceThreshold: 0.28,
-  vignetteDarkness: 0.14,
-  cubeRotationTurns: 1,
-  glbRotationTurns: 1,
-  glbScale: 1.35,
-};
-
-const isTextElement = (element: SceneElement): element is TextElement => element.type === 'text';
-const isCubeElement = (element: SceneElement): element is CubeElement => element.type === 'cube';
-const isGlbObjectElement = (element: SceneElement): element is GlbObjectElement => element.type === 'glbObject';
 
 type DevLevaControlsProps = {
   values: ScenePolishControls;
@@ -104,176 +78,6 @@ const DevLevaControls = import.meta.env.DEV
       return { default: DevLevaControlsPanel };
     })
   : null;
-
-const getElementProgress = (
-  element: SceneElement,
-  scrollProgress: number,
-  viewportHeight: number,
-  sceneStartVh: number,
-  sceneHeightVh: number
-) => {
-  const normalizedOffsetPx = scrollProgress * viewportHeight;
-  const sceneStartPx = (sceneStartVh / 100) * viewportHeight;
-  const sceneHeightPx = (sceneHeightVh / 100) * viewportHeight;
-
-  const elStartPx = sceneStartPx + element.start * sceneHeightPx;
-  const elEndPx = sceneStartPx + element.end * sceneHeightPx;
-
-  let progress = 0;
-  if (elEndPx > elStartPx) {
-    progress = (normalizedOffsetPx - elStartPx) / (elEndPx - elStartPx);
-  }
-
-  return Math.max(0, Math.min(1, progress));
-};
-
-function TextElementView({
-  element,
-  gsapInstance,
-  scrollTrigger,
-  container,
-  sceneStartPx,
-  sceneHeightPx,
-}: {
-  element: SceneElement;
-  gsapInstance: typeof gsapType;
-  scrollTrigger: typeof ScrollTriggerType;
-  container: HTMLDivElement;
-  sceneStartPx: number;
-  sceneHeightPx: number;
-}) {
-  const elRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (element.type !== 'text' || !elRef.current) return;
-
-    const elStartPx = sceneStartPx + element.start * sceneHeightPx;
-    const elEndPx = sceneStartPx + element.end * sceneHeightPx;
-    const distance = Math.max(elEndPx - elStartPx, 1);
-
-    const target = elRef.current;
-    gsapInstance.set(target, { y: element.startY, opacity: element.startOpacity });
-
-    const tween = gsapInstance.to(target, {
-      y: element.endY,
-      opacity: element.endOpacity,
-      ease: 'none',
-      scrollTrigger: {
-        scroller: container,
-        trigger: container,
-        start: `top+=${elStartPx} top`,
-        end: `top+=${elStartPx + distance} top`,
-        scrub: true,
-      },
-    });
-
-    return () => {
-      tween.scrollTrigger?.kill();
-      tween.kill();
-    };
-  }, [element, gsapInstance, scrollTrigger, container, sceneStartPx, sceneHeightPx]);
-
-  if (element.type !== 'text') return null;
-
-  return (
-    <div
-      ref={elRef}
-      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-5xl font-bold tracking-tighter text-slate-100 whitespace-nowrap"
-    >
-      {element.content}
-    </div>
-  );
-}
-
-function CubeElementView({
-  element,
-  sceneStartVh,
-  sceneHeightVh,
-  polishControls,
-}: {
-  element: CubeElement;
-  sceneStartVh: number;
-  sceneHeightVh: number;
-  polishControls: ScenePolishControls;
-}) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
-  const progressRef = React.useContext(ScrollProgressContext);
-
-  useFrame(({ size }) => {
-    if (!meshRef.current || !materialRef.current) return;
-
-    const progress = getElementProgress(element, progressRef.current, size.height, sceneStartVh, sceneHeightVh);
-
-    meshRef.current.rotation.x = progress * Math.PI * 2 * polishControls.cubeRotationTurns;
-    meshRef.current.rotation.y = progress * Math.PI * 2 * polishControls.cubeRotationTurns;
-
-    const currentY = element.startY + (element.endY - element.startY) * progress;
-    meshRef.current.position.y = currentY / -50;
-
-    const currentOpacity = element.startOpacity + (element.endOpacity - element.startOpacity) * progress;
-    materialRef.current.opacity = currentOpacity;
-  });
-
-  return (
-    <mesh ref={meshRef}>
-      <boxGeometry args={[2, 2, 2]} />
-      <meshStandardMaterial
-        ref={materialRef}
-        color="#10b981"
-        transparent
-        roughness={0.2}
-        metalness={0.8}
-      />
-    </mesh>
-  );
-}
-
-function GlbObjectElementView({
-  element,
-  sceneStartVh,
-  sceneHeightVh,
-  polishControls,
-}: {
-  element: GlbObjectElement;
-  sceneStartVh: number;
-  sceneHeightVh: number;
-  polishControls: ScenePolishControls;
-}) {
-  const groupRef = useRef<THREE.Group>(null);
-  const progressRef = React.useContext(ScrollProgressContext);
-  const gltf = useGLTF(element.modelPath || DEFAULT_GLB_OBJECT_MODEL_PATH);
-
-  useFrame(({ size }) => {
-    if (!groupRef.current) return;
-
-    const progress = getElementProgress(element, progressRef.current, size.height, sceneStartVh, sceneHeightVh);
-    const currentY = element.startY + (element.endY - element.startY) * progress;
-    const currentOpacity = element.startOpacity + (element.endOpacity - element.startOpacity) * progress;
-
-    groupRef.current.position.y = currentY / -50;
-    groupRef.current.rotation.x = progress * Math.PI * 0.5;
-    groupRef.current.rotation.y = progress * Math.PI * 2 * polishControls.glbRotationTurns;
-
-    groupRef.current.traverse(child => {
-      if (!(child instanceof THREE.Mesh)) return;
-
-      const materials = Array.isArray(child.material) ? child.material : [child.material];
-      materials.forEach(material => {
-        material.transparent = true;
-        material.opacity = currentOpacity;
-      });
-    });
-  });
-
-  return (
-    <group ref={groupRef} scale={polishControls.glbScale}>
-      <Clone object={gltf.scene} />
-    </group>
-  );
-}
-
-useGLTF.preload(DEFAULT_GLB_OBJECT_MODEL_PATH);
 
 function ScenePostProcessing({ polishControls }: { polishControls: ScenePolishControls }) {
   return (
@@ -452,30 +256,34 @@ export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewP
           <ScrollProgressContext.Provider value={scrollProgressRef.current}>
             {sceneLayouts.map(scene =>
               scene.elements
-                .filter(isCubeElement)
-                .map(el => (
-                  <CubeElementView
-                    key={el.id}
-                    element={el}
-                    sceneStartVh={scene.startVh}
-                    sceneHeightVh={scene.height}
-                    polishControls={polishControls}
-                  />
-                ))
+                .filter(el => el.type === 'cube')
+                .map(el => {
+                  const CubeR3f = elementRegistry.cube?.R3f;
+                  if (!CubeR3f) return null;
+                  return (
+                    <CubeR3f
+                      key={el.id}
+                      element={el}
+                      ctx={{ sceneStartVh: scene.startVh, sceneHeightVh: scene.height, polishControls }}
+                    />
+                  );
+                })
             )}
             <Suspense fallback={null}>
               {sceneLayouts.map(scene =>
                 scene.elements
-                  .filter(isGlbObjectElement)
-                  .map(el => (
-                    <GlbObjectElementView
-                      key={el.id}
-                      element={el}
-                      sceneStartVh={scene.startVh}
-                      sceneHeightVh={scene.height}
-                      polishControls={polishControls}
-                    />
-                  ))
+                  .filter(el => el.type === 'glbObject')
+                  .map(el => {
+                    const GlbObjectR3f = elementRegistry.glbObject?.R3f;
+                    if (!GlbObjectR3f) return null;
+                    return (
+                      <GlbObjectR3f
+                        key={el.id}
+                        element={el}
+                        ctx={{ sceneStartVh: scene.startVh, sceneHeightVh: scene.height, polishControls }}
+                      />
+                    );
+                  })
               )}
             </Suspense>
           </ScrollProgressContext.Provider>
@@ -561,17 +369,23 @@ function SceneDOMObserver({
 
   return (
     <div ref={ref} className="absolute inset-0 overflow-hidden pointer-events-none">
-      {layout.heightPx > 0 && scene.elements.filter(isTextElement).map(el => (
-        <TextElementView
-          key={el.id}
-          element={el}
-          gsapInstance={gsapInstance}
-          scrollTrigger={scrollTrigger}
-          container={container}
-          sceneStartPx={layout.startPx}
-          sceneHeightPx={layout.heightPx}
-        />
-      ))}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'text').map(el => {
+        const TextDom = elementRegistry.text?.Dom;
+        if (!TextDom) return null;
+        return (
+          <TextDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

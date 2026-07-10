@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ProjectSchema, Scene, SceneElement, ElementType, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../types';
-import { Plus, Type, Box, MoveVertical, Layout, Trash2, Mountain, Users, Activity, Wind, Component } from 'lucide-react';
+import { Plus, Type, Box, MoveVertical, Layout, Trash2, Mountain, Users, Activity, Wind, Component, ChevronDown } from 'lucide-react';
+import { ElementEditor } from './ElementEditor';
+import { elementRegistry } from './elements/registry';
 
 interface EditorPanelProps {
   schema: ProjectSchema;
@@ -56,6 +58,8 @@ const createElement = (type: ElementType): SceneElement => {
 export function EditorPanel({ schema, onChange, onCollapse, isCollapsed = false }: EditorPanelProps) {
   const [expandedScenes, setExpandedScenes] = useState<Set<string>>(new Set());
   const [selectedThumbnail, setSelectedThumbnail] = useState<string | null>(null);
+  const [expandedSceneId, setExpandedSceneId] = useState<string | null>(null);
+  const [expandedElementId, setExpandedElementId] = useState<string | null>(null);
 
   const handleAddScene = () => {
     const newScene: Scene = {
@@ -129,6 +133,42 @@ export function EditorPanel({ schema, onChange, onCollapse, isCollapsed = false 
     e.dataTransfer.dropEffect = 'copy';
   };
 
+  const handleSceneCardClick = (e: React.MouseEvent, sceneId: string) => {
+    if ((e.target as HTMLElement).closest('[data-role="delete-scene"]')) return;
+    setExpandedSceneId(prev => (prev === sceneId ? null : sceneId));
+  };
+
+  const toggleElementExpand = (elementId: string) => {
+    setExpandedElementId(prev => (prev === elementId ? null : elementId));
+  };
+
+  const handleElementChange = (sceneId: string, elementId: string, updated: SceneElement) => {
+    const sceneIndex = schema.scenes.findIndex(s => s.id === sceneId);
+    if (sceneIndex === -1) return;
+    const scene = schema.scenes[sceneIndex];
+    const elementIndex = scene.elements.findIndex(el => el.id === elementId);
+    if (elementIndex === -1) return;
+
+    const newElements = [...scene.elements];
+    newElements[elementIndex] = updated;
+
+    const newScenes = [...schema.scenes];
+    newScenes[sceneIndex] = { ...scene, elements: newElements };
+
+    onChange({ ...schema, scenes: newScenes });
+  };
+
+  const handleElementDelete = (sceneId: string, elementId: string) => {
+    const sceneIndex = schema.scenes.findIndex(s => s.id === sceneId);
+    if (sceneIndex === -1) return;
+    const scene = schema.scenes[sceneIndex];
+
+    const newScenes = [...schema.scenes];
+    newScenes[sceneIndex] = { ...scene, elements: scene.elements.filter(el => el.id !== elementId) };
+
+    onChange({ ...schema, scenes: newScenes });
+  };
+
   return (
     <div className="h-full flex flex-col bg-slate-950 border-r border-slate-800 relative select-none">
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
@@ -178,17 +218,19 @@ export function EditorPanel({ schema, onChange, onCollapse, isCollapsed = false 
                 </>
               )}
               
-              <div 
+              <div
                 className={`flex ${isCollapsed ? 'gap-0 flex-col items-center' : 'gap-3'} relative group`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, scene.id)}
+                onClickCapture={(e) => handleSceneCardClick(e, scene.id)}
               >
                 {!isCollapsed && (
                   <div className="w-6 text-right text-xs text-slate-500 font-mono mt-2">{i + 1}</div>
                 )}
                 <div className={`flex-1 relative ${isCollapsed ? 'w-full' : ''}`}>
                   {!isCollapsed && (
-                    <button 
+                    <button
+                      data-role="delete-scene"
                       onClick={(e) => handleDeleteScene(e, scene.id)}
                       className="absolute top-2 right-2 p-1.5 bg-slate-900/90 border border-slate-700 text-slate-400 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-opacity z-20 hover:bg-slate-800"
                       title="Delete Scene"
@@ -284,6 +326,51 @@ export function EditorPanel({ schema, onChange, onCollapse, isCollapsed = false 
                   )}
                 </div>
               </div>
+
+              {!isCollapsed && expandedSceneId === scene.id && (
+                <div className="flex gap-3 relative">
+                  <div className="w-6 shrink-0" />
+                  <div className="flex-1 border border-slate-800 bg-slate-900/60 rounded-lg p-2 flex flex-col gap-1">
+                    {scene.elements.length === 0 && (
+                      <span className="text-[10px] text-slate-600 uppercase tracking-widest text-center py-2">
+                        No elements
+                      </span>
+                    )}
+                    {scene.elements.map((el) => {
+                      const definition = elementRegistry[el.type];
+                      const Icon = definition?.icon;
+                      const elementLabel = definition?.label ?? el.type;
+                      const isElementExpanded = expandedElementId === el.id;
+
+                      return (
+                        <div key={el.id} className="flex flex-col">
+                          <div
+                            className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-slate-800/60 text-xs text-slate-300 transition-colors"
+                            onClick={() => toggleElementExpand(el.id)}
+                          >
+                            <span className="text-teal-400 flex items-center">
+                              {Icon ? <Icon size={12} /> : <Layout size={12} />}
+                            </span>
+                            <span className="flex-1 truncate">{elementLabel}</span>
+                            <span className="text-slate-600 font-mono text-[10px]">{el.id.slice(0, 6)}</span>
+                            <ChevronDown
+                              size={12}
+                              className={`text-slate-500 transition-transform shrink-0 ${isElementExpanded ? 'rotate-180' : ''}`}
+                            />
+                          </div>
+                          {isElementExpanded && (
+                            <ElementEditor
+                              element={el}
+                              onChange={(updated) => handleElementChange(scene.id, el.id, updated)}
+                              onDelete={() => handleElementDelete(scene.id, el.id)}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </React.Fragment>
           );
         })}

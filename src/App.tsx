@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ProjectSchema } from './types';
+import { migrateSchema } from './schema/migrate';
 import { EditorPanel } from './components/EditorPanel';
 import { PreviewPanel, PreviewPlaybackHandle } from './components/PreviewPanel';
 import { ChatPanel } from './components/ChatPanel';
@@ -43,7 +44,7 @@ const INITIAL_SCHEMA: ProjectSchema = {
 };
 
 export default function App() {
-  const [schema, setSchema] = useState<ProjectSchema>(INITIAL_SCHEMA);
+  const [schema, setSchema] = useState<ProjectSchema>(() => migrateSchema(INITIAL_SCHEMA));
   const [editorWidth, setEditorWidth] = useState(450);
   const [chatWidth, setChatWidth] = useState(350);
   const [isEditorExpanded, setIsEditorExpanded] = useState(true);
@@ -53,6 +54,13 @@ export default function App() {
   const [scrub, setScrub] = useState(1);
   const [fps, setFps] = useState(30);
   const studioPlaybackRef = useRef<PreviewPlaybackHandle | null>(null);
+
+  const applySchema = useCallback((next: unknown) => setSchema(migrateSchema(next)), []);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (window as any).__studio = { getSchema: () => schema, setSchema: applySchema, playback: studioPlaybackRef };
+  }, [schema, applySchema]);
 
   const assetTypes = [
     { id: 'environment', icon: Mountain, label: 'Environments' },
@@ -269,7 +277,7 @@ export default function App() {
         {isEditorExpanded ? (
           <>
             <div style={{ width: editorWidth }} className="shrink-0 border-r border-slate-800 shadow-2xl z-30 flex flex-col bg-slate-950 h-full overflow-hidden">
-              <EditorPanel schema={schema} onChange={setSchema} onCollapse={() => setIsEditorExpanded(false)} />
+              <EditorPanel schema={schema} onChange={applySchema} onCollapse={() => setIsEditorExpanded(false)} />
             </div>
             <div 
               className="w-1 cursor-col-resize hover:bg-teal-500/50 bg-slate-800 shrink-0 z-40 transition-colors h-full"
@@ -278,7 +286,7 @@ export default function App() {
           </>
         ) : (
           <div className="w-16 shrink-0 border-r border-slate-800 bg-slate-950 flex flex-col z-30 shadow-2xl h-full overflow-hidden">
-             <EditorPanel schema={schema} onChange={setSchema} onCollapse={() => setIsEditorExpanded(true)} isCollapsed={true} />
+             <EditorPanel schema={schema} onChange={applySchema} onCollapse={() => setIsEditorExpanded(true)} isCollapsed={true} />
           </div>
         )}
 
@@ -295,7 +303,7 @@ export default function App() {
               onMouseDown={startResizeChat}
             />
             <div style={{ width: chatWidth }} className="shrink-0 border-l border-slate-800 shadow-2xl z-30 flex flex-col bg-slate-950 h-full overflow-hidden">
-              <ChatPanel schema={schema} onChange={setSchema} onCollapse={() => setIsChatExpanded(false)} />
+              <ChatPanel schema={schema} onChange={applySchema} onCollapse={() => setIsChatExpanded(false)} />
             </div>
           </>
         ) : null}

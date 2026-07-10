@@ -8,37 +8,46 @@ description: Checklist for adding a new ElementType to Animation Studio Pro with
 This app has three layers that must agree on which element types exist and which
 actually render. Historically they drifted (`ElementType` had 9 values, the AI
 could only emit 2, and the renderer only drew 2). Closing that drift is P0 — do
-not reopen it. Every new element type touches **all three** of these files:
+not reopen it. Every new element type touches **all three** of these layers in
+the same change:
 
-1. **`src/types.ts`** — add the value to the `ElementType` union (and a typed
-   interface extending `BaseElement` if it needs extra fields, following the
-   `TextElement`/`CubeElement` pattern). Update the comment above `ElementType`
-   if the rendered/placeholder split changes.
+1. **`src/types.ts`** — add the value to the `ElementType` union and a typed
+   interface extending `BaseElement` if it needs extra fields (follow the
+   `TextElement`/`ImageElement` pattern). Update the comment above `ElementType`
+   if the rendered/placeholder split changes. If the new type has fields that
+   need defaults, add them to `src/schema/migrate.ts`.
 
-2. **`server.ts`** — add the value to the `updateSchema` function declaration's
-   `type` enum (`parameters.properties.scenes.items.properties.elements.items.properties.type.enum`),
-   and add a line to the system prompt telling the model what the type is for
-   and when to use it. If the type isn't renderable yet, do NOT add it here —
-   the AI must only be able to emit types that actually render.
+2. **`src/components/elements/`** — create `<Type>ElementView.tsx` and register
+   it in `registry.tsx`: an `ElementDefinition` with `layer` (`'dom'` or
+   `'r3f'`), the renderer (`Dom` or `R3f`), `fields: FieldSpec[]` (drives the
+   ElementEditor form automatically), `create()` (drag-drop factory), `label`,
+   `icon`, and `interactive: true` if the element must receive pointer events.
+   DOM renderers get scrub/layout behavior from the shared plumbing; R3F
+   renderers must read `ScrollProgressContext` from `./progress` (one-scroll-model
+   rule — never read scrollTop). Registry files must not import editor/chat/App
+   modules (they are bundled into the standalone player).
 
-3. **`components/PreviewPanel.tsx`** (or `src/components/PreviewPanel.tsx` in
-   this repo layout) — add a real renderer: either a `motion`/Framer element
-   (like `TextElementView`) or an `@react-three/fiber` mesh (like
-   `CubeElementView`), and wire it into the scene render loop with a
-   `.filter(el => el.type === '<newtype>')` the same way `text` and `cube` are
-   filtered.
+3. **`server/gemini.ts`** — add the value to the `updateSchema` declaration's
+   `type` enum, any new properties to the element item schema, and a cheatsheet
+   line in the system prompt (what the type is, required fields, when to use).
+   Extend `sanitizeSchema()` defaults if the type has required fields the AI
+   might omit. If the type isn't renderable yet, do NOT add it here — the AI
+   must only emit types that actually render.
 
 ## Order of operations
 
-A type is only "done" when all three are updated in the same change:
+A type is only "done" when all three layers are updated in the same change:
 
-- Add to `types.ts` only → editor can create it, nothing else knows about it. Fine as an interim placeholder, but must stay OUT of `server.ts`'s enum.
-- Add to `types.ts` + `PreviewPanel.tsx` but not `server.ts` → renders when placed manually via the editor, but the AI can't create/edit it. Acceptable only as a deliberate interim step — document it as such.
-- Add to `server.ts`'s enum without a `PreviewPanel.tsx` renderer → **do not do this**. This is exactly the drift P0 closed. The AI would emit a type that silently doesn't show up.
+- `types.ts` only → editor placeholder; must stay OUT of the gemini enum.
+- `types.ts` + registry renderer but not `server/gemini.ts` → renders when placed
+  manually, AI can't emit it. Acceptable only as a deliberate, documented interim.
+- gemini enum without a registry renderer → **never**. That is the drift P0 closed.
 
 ## Verification
 
 - `npm run lint` (`tsc --noEmit`) must be clean.
-- Grep-confirm the AI-emittable set matches the rendered set:
-  `grep -n "enum:" server.ts` should list exactly the types filtered on in
-  `PreviewPanel.tsx` (`grep -n "type ===" src/components/PreviewPanel.tsx`).
+- Grep-confirm the AI-emittable set matches the registry:
+  `grep -n "enum:" server/gemini.ts` must list exactly the keys of
+  `elementRegistry` in `src/components/elements/registry.tsx`.
+- Playwright fixture check via the DEV hook: `window.__studio.setSchema(fixture)`
+  → `__studio.playback.current.seek(p)` → assert the element renders/animates.
