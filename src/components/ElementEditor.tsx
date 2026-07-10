@@ -2,12 +2,28 @@ import React from 'react';
 import { SceneElement } from '../types';
 import { Trash2, Plus } from 'lucide-react';
 import { elementRegistry } from './elements/registry';
-import { BASE_FIELDS, FieldSpec } from './elements/specs';
+import { BASE_FIELDS, LAYOUT_FIELDS, FieldSpec } from './elements/specs';
 
 interface ElementEditorProps {
   element: SceneElement;
   onChange: (updatedElement: SceneElement) => void;
   onDelete: () => void;
+}
+
+// Dot-path get/set for field keys like 'layout.x', used so nested props
+// (currently just `layout`) get editor UI without bespoke per-field wiring.
+function getPath(record: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((value, key) => {
+    if (value && typeof value === 'object') return (value as Record<string, unknown>)[key];
+    return undefined;
+  }, record);
+}
+
+function setPath(record: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
+  const [head, ...rest] = path.split('.');
+  if (rest.length === 0) return { ...record, [head]: value };
+  const nested = record[head] && typeof record[head] === 'object' ? (record[head] as Record<string, unknown>) : {};
+  return { ...record, [head]: setPath(nested, rest.join('.'), value) };
 }
 
 const INPUT_CLASSES =
@@ -210,11 +226,11 @@ export function ElementEditor({ element, onChange, onDelete }: ElementEditorProp
   const elementLabel = definition?.label ?? element.type;
   const typeFields = definition?.fields ?? [];
 
-  const handleFieldChange = (key: string, value: unknown) => {
-    onChange({ ...element, [key]: value } as SceneElement);
-  };
-
   const elementRecord = element as unknown as Record<string, unknown>;
+
+  const handleFieldChange = (key: string, value: unknown) => {
+    onChange(setPath(elementRecord, key, value) as unknown as SceneElement);
+  };
 
   return (
     <div className="border border-slate-700 bg-slate-800/50 backdrop-blur-sm p-4 mb-3 relative">
@@ -237,7 +253,15 @@ export function ElementEditor({ element, onChange, onDelete }: ElementEditorProp
           <FieldInput
             key={field.key}
             field={field}
-            value={elementRecord[field.key]}
+            value={getPath(elementRecord, field.key)}
+            onChange={(value) => handleFieldChange(field.key, value)}
+          />
+        ))}
+        {LAYOUT_FIELDS.map((field) => (
+          <FieldInput
+            key={field.key}
+            field={field}
+            value={getPath(elementRecord, field.key)}
             onChange={(value) => handleFieldChange(field.key, value)}
           />
         ))}
@@ -245,7 +269,7 @@ export function ElementEditor({ element, onChange, onDelete }: ElementEditorProp
           <FieldInput
             key={field.key}
             field={field}
-            value={elementRecord[field.key]}
+            value={getPath(elementRecord, field.key)}
             onChange={(value) => handleFieldChange(field.key, value)}
           />
         ))}

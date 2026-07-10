@@ -100,11 +100,25 @@ export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewP
   const lenisRef = useRef<Lenis | null>(null);
   const pendingPlayResolveRef = useRef<(() => void) | null>(null);
   const [polishControls, setPolishControls] = useState<ScenePolishControls>(DEFAULT_POLISH_CONTROLS);
+  // Measured container height: the single length reference for scene sizing
+  // and scrub math (see the Scrollable Content Layer comment below).
+  const [viewportPx, setViewportPx] = useState(0);
 
   const [engines, setEngines] = useState<{
     gsapInstance: typeof gsapType;
     scrollTrigger: typeof ScrollTriggerType;
   } | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() => {
+      setViewportPx(container.clientHeight);
+    });
+    observer.observe(container);
+    setViewportPx(container.clientHeight);
+    return () => observer.disconnect();
+  }, []);
 
   // Dynamic-import GSAP + ScrollTrigger per repo perf rules; register once.
   useEffect(() => {
@@ -297,20 +311,37 @@ export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewP
         </Suspense>
       )}
 
-      {/* Scrollable Content Layer */}
+      {/* Scrollable Content Layer. Scene heights are sized in px from the
+          container's measured height (not CSS vh): the scrub math in
+          SceneDOMObserver/useScrubTween keys off container.clientHeight, and
+          vh (window-relative) desyncs from it whenever the container isn't
+          full-window (studio toolbar inset, landing 80vh embed) — leaving
+          late-window elements unable to complete. One length reference. */}
       <div
         ref={containerRef}
         className="absolute inset-0 overflow-y-auto overflow-x-hidden z-20"
       >
         <div ref={contentRef} className="relative flex flex-col">
-          {sceneLayouts.map(scene => (
+          {sceneLayouts.map((scene, sceneIndex) => (
             <div
               key={scene.id}
               className="relative w-full border-b border-slate-800/30"
-              style={{ height: `${scene.height}vh` }}
+              style={{
+                // The last scene gets one extra viewport of height (scrub math
+                // still uses the un-padded height): scroll ends a viewport short
+                // of the content bottom, so without the pad the final scene's
+                // late-window elements (end near 1) could never complete.
+                height:
+                  viewportPx > 0
+                    ? `${(scene.height / 100) * viewportPx + (sceneIndex === sceneLayouts.length - 1 ? viewportPx : 0)}px`
+                    : `${scene.height}vh`,
+              }}
             >
               {/* Sticky container that stays on screen for the duration of the scene's height */}
-              <div className="sticky top-0 w-full h-[100vh] overflow-hidden pointer-events-none">
+              <div
+                className="sticky top-0 w-full overflow-hidden pointer-events-none"
+                style={{ height: viewportPx > 0 ? `${viewportPx}px` : '100vh' }}
+              >
                 <div className="absolute top-4 left-4 text-xs font-mono text-slate-500 uppercase tracking-widest">
                   Scene {scene.id.slice(0, 6)} ({scene.height}vh)
                 </div>
@@ -374,6 +405,40 @@ function SceneDOMObserver({
         if (!TextDom) return null;
         return (
           <TextDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'image').map(el => {
+        const ImageDom = elementRegistry.image?.Dom;
+        if (!ImageDom) return null;
+        return (
+          <ImageDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'video').map(el => {
+        const VideoDom = elementRegistry.video?.Dom;
+        if (!VideoDom) return null;
+        return (
+          <VideoDom
             key={el.id}
             element={el}
             ctx={{

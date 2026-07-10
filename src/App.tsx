@@ -63,6 +63,8 @@ export default function App() {
   }, [schema, applySchema]);
 
   const assetTypes = [
+    { id: 'image', icon: ImageIcon, label: 'Image' },
+    { id: 'video', icon: Video, label: 'Video' },
     { id: 'environment', icon: Mountain, label: 'Environments' },
     { id: 'object', icon: Box, label: 'Objects' },
     { id: 'character', icon: Users, label: 'Characters' },

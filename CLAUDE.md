@@ -38,6 +38,6 @@ Scene `height` is in `vh`; each element's `start`/`end` are 0–1 fractions of i
 
 ## Gotchas
 
-- `server.ts` uses model id `"gemini-3.5-flash"` and its `updateSchema` declaration only enumerates `text`/`cube` (its system prompt even has a leftover "Wait, ..." note), while `ElementType` in `types.ts` has 9 types. The AI path and the full type union are out of sync — only `text`/`cube` actually render in `PreviewPanel`; other types are editor-only placeholders.
+- `server/gemini.ts` uses model id `"gemini-3.5-flash"`. Its `updateSchema` enum and system-prompt cheatsheet are kept in sync with `src/components/elements/registry.tsx`: `text`, `cube`, `glbObject`, `image`, and `video` are the 5 live types (both AI-emittable and rendered in `PreviewPanel`); the rest of the `ElementType` union in `types.ts` are editor-only placeholders. See `.claude/skills/new-element-type/SKILL.md` before adding another type.
 - `@/*` resolves to the repo root (tsconfig `paths` + vite alias), but components import via relative paths — follow the existing relative style.
 - `vite.config.ts` gates HMR/file-watching on `DISABLE_HMR` (AI Studio sets it to avoid flicker during agent edits). Don't "fix" the disabled watcher.

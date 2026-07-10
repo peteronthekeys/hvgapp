@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProjectSchema, Scene, SceneElement, ElementType, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../types';
+import { ProjectSchema, Scene, SceneElement, ElementType } from '../types';
 import { Plus, Type, Box, MoveVertical, Layout, Trash2, Mountain, Users, Activity, Wind, Component, ChevronDown } from 'lucide-react';
 import { ElementEditor } from './ElementEditor';
 import { elementRegistry } from './elements/registry';
@@ -11,11 +11,18 @@ interface EditorPanelProps {
   isCollapsed?: boolean;
 }
 
+// Editor-only placeholder types: draggable/creatable here but not in
+// elementRegistry — they stay out of the AI-emittable set until they have a
+// real renderer (see .claude/skills/new-element-type/SKILL.md).
+const PLACEHOLDER_TYPES: ElementType[] = ['environment', 'object', 'character', 'action', 'motion', 'font', 'component'];
+
 const getElementIcon = (type: ElementType) => {
+  const definition = elementRegistry[type];
+  if (definition) {
+    const Icon = definition.icon;
+    return <Icon size={12} />;
+  }
   switch (type) {
-    case 'text': return <Type size={12} />;
-    case 'cube': return <Box size={12} />;
-    case 'glbObject': return <Box size={12} />;
     case 'environment': return <Mountain size={12} />;
     case 'object': return <Box size={12} />;
     case 'character': return <Users size={12} />;
@@ -27,32 +34,19 @@ const getElementIcon = (type: ElementType) => {
   }
 };
 
-const elementTypes: ElementType[] = ['text', 'cube', 'glbObject', 'environment', 'object', 'character', 'action', 'motion', 'font', 'component'];
-
 const isElementType = (value: string): value is ElementType => {
-  return elementTypes.includes(value as ElementType);
+  return value in elementRegistry || PLACEHOLDER_TYPES.includes(value as ElementType);
 };
 
+// Live types (text/cube/glbObject/image/video) are created via their
+// registry `create()` factory — this used to be a second, drifting copy of
+// those defaults. Placeholders fall back to a generic shape.
 const createElement = (type: ElementType): SceneElement => {
-  if (type === 'text') {
-    return { id: crypto.randomUUID(), type: 'text', content: 'New Text', start: 0, end: 1, startY: 100, endY: 0, startOpacity: 0, endOpacity: 1 };
-  }
-
-  if (type === 'glbObject') {
-    return {
-      id: crypto.randomUUID(),
-      type: 'glbObject',
-      modelPath: DEFAULT_GLB_OBJECT_MODEL_PATH,
-      start: 0,
-      end: 1,
-      startY: 100,
-      endY: -100,
-      startOpacity: 0,
-      endOpacity: 1,
-    };
-  }
-
-  return { id: crypto.randomUUID(), type, start: 0, end: 1, startY: 100, endY: -100, startOpacity: 0, endOpacity: 1 };
+  const definition = elementRegistry[type];
+  if (definition) return definition.create();
+  // Only placeholder types (guarded by isElementType) reach here — registry
+  // lookup above can't narrow `type` for TS the way a literal check would.
+  return { id: crypto.randomUUID(), type, start: 0, end: 1, startY: 100, endY: -100, startOpacity: 0, endOpacity: 1 } as SceneElement;
 };
 
 export function EditorPanel({ schema, onChange, onCollapse, isCollapsed = false }: EditorPanelProps) {

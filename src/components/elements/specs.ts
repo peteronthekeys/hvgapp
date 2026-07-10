@@ -22,3 +22,26 @@ export const BASE_FIELDS: FieldSpec[] = [
   { key: 'startOpacity', label: 'Start Opacity', kind: 'range', min: 0, max: 1, step: 0.05 },
   { key: 'endOpacity', label: 'End Opacity', kind: 'range', min: 0, max: 1, step: 0.05 },
 ];
+
+// Shared layout fields present on every SceneElement via the optional
+// `layout` prop (see ElementLayout in src/types.ts). Keys use dot-paths
+// (e.g. 'layout.x') — ElementEditor's generic form reads/writes nested
+// values immutably. Rendered between type-specific fields and BASE_FIELDS.
+export const LAYOUT_FIELDS: FieldSpec[] = [
+  { key: 'layout.x', label: 'X %', kind: 'number', min: 0, max: 100, step: 1 },
+  { key: 'layout.y', label: 'Y %', kind: 'number', min: 0, max: 100, step: 1 },
+  { key: 'layout.width', label: 'Width %', kind: 'number', min: 1, max: 100, step: 1 },
+  {
+    key: 'layout.anchor',
+    label: 'Anchor',
+    kind: 'select',
+    options: [
+      { value: 'center', label: 'Center' },
+      { value: 'top-left', label: 'Top Left' },
+      { value: 'top-right', label: 'Top Right' },
+      { value: 'bottom-left', label: 'Bottom Left' },
+      { value: 'bottom-right', label: 'Bottom Right' },
+    ],
+  },
+  { key: 'layout.z', label: 'Z', kind: 'number', step: 1 },
+];
