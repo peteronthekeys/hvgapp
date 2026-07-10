@@ -18,6 +18,7 @@ UI components for editing, previewing, and AI-updating the animation schema.
 - R3F element animation must consume `ScrollProgressContext` from `elements/progress.ts`; do not add per-frame DOM scroll reads.
 - Files under `elements/` must not import EditorPanel/ChatPanel/App — they are bundled into the standalone player.
 - Never use `ScrollTrigger.pin` inside the preview's scroll container (it fights the scrollerProxy) — the sticky scene wrapper IS the pin mechanism.
+- Interactive elements (carousel, click-to-play video, etc.) opt in via the registry `interactive` flag on their `ElementDefinition` (or a `PositionedElement` `interactive` prop override for per-instance cases) — this is what re-enables `pointer-events-auto` on an otherwise `pointer-events-none` scene layer. Any nested scroller inside such an element (e.g. a carousel's horizontal track) must carry `data-lenis-prevent` so Lenis doesn't hijack its wheel/touch input.
 
 ## Work Guidance
 

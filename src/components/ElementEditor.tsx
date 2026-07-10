@@ -2,7 +2,7 @@ import React from 'react';
 import { SceneElement } from '../types';
 import { Trash2, Plus } from 'lucide-react';
 import { elementRegistry } from './elements/registry';
-import { BASE_FIELDS, LAYOUT_FIELDS, FieldSpec } from './elements/specs';
+import { BASE_FIELDS, LAYOUT_FIELDS, TRIGGER_FIELDS, FieldSpec } from './elements/specs';
 
 interface ElementEditorProps {
   element: SceneElement;
@@ -258,6 +258,14 @@ export function ElementEditor({ element, onChange, onDelete }: ElementEditorProp
           />
         ))}
         {LAYOUT_FIELDS.map((field) => (
+          <FieldInput
+            key={field.key}
+            field={field}
+            value={getPath(elementRecord, field.key)}
+            onChange={(value) => handleFieldChange(field.key, value)}
+          />
+        ))}
+        {definition?.layer === 'dom' && TRIGGER_FIELDS.map((field) => (
           <FieldInput
             key={field.key}
             field={field}

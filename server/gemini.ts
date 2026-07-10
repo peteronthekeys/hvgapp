@@ -36,13 +36,14 @@ const updateSchemaDeclaration = {
           properties: {
             id: { type: Type.STRING },
             height: { type: Type.NUMBER },
+            pin: { type: Type.BOOLEAN },
             elements: {
               type: Type.ARRAY,
               items: {
                 type: Type.OBJECT,
                 properties: {
                   id: { type: Type.STRING },
-                  type: { type: Type.STRING, enum: ["text", "cube", "glbObject", "image", "video"] },
+                  type: { type: Type.STRING, enum: ["text", "cube", "glbObject", "image", "video", "marquee", "carousel"] },
                   content: { type: Type.STRING },
                   splitMode: { type: Type.STRING, enum: ["none", "chars", "words", "lines"] },
                   staggerEach: { type: Type.NUMBER },
@@ -56,6 +57,35 @@ const updateSchemaDeclaration = {
                   poster: { type: Type.STRING },
                   mode: { type: Type.STRING, enum: ["background", "clickToPlay"] },
                   loop: { type: Type.BOOLEAN },
+                  items: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  speedPxPerSec: { type: Type.NUMBER },
+                  direction: { type: Type.STRING, enum: ["left", "right"] },
+                  gapRem: { type: Type.NUMBER },
+                  slides: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        id: { type: Type.STRING },
+                        src: { type: Type.STRING },
+                        caption: { type: Type.STRING },
+                      },
+                      required: ["id", "src"],
+                    },
+                  },
+                  autoplayMs: { type: Type.NUMBER },
+                  showDots: { type: Type.BOOLEAN },
+                  showArrows: { type: Type.BOOLEAN },
+                  trigger: { type: Type.STRING, enum: ["scrub", "appear"] },
+                  appear: {
+                    type: Type.OBJECT,
+                    properties: {
+                      preset: { type: Type.STRING, enum: ["fade", "slide-up", "slide-left", "scale", "spring"] },
+                      duration: { type: Type.NUMBER },
+                      delay: { type: Type.NUMBER },
+                      once: { type: Type.BOOLEAN },
+                    },
+                  },
                   start: { type: Type.NUMBER },
                   end: { type: Type.NUMBER },
                   startY: { type: Type.NUMBER },
@@ -103,10 +133,14 @@ Rules:
    - glbObject: a GLB-backed 3D model. Required: modelPath (default "/models/scroll-orb.glb" unless the user gives another path). Use for custom 3D assets.
    - image: a static image. Required: src. Optional: srcset, alt, objectFit ("cover" | "contain", default "cover"). Use for photos, illustrations, logos.
    - video: an inline video. Required: src. Optional: poster, mode ("background" | "clickToPlay", default "background"), loop (default true for background). Prefer "background" mode unless the user explicitly wants a play button.
+   - marquee: infinite scrolling text/logo strip. Required: items (array of short strings). Optional: speedPxPerSec (default 80), direction ("left" | "right", default "left"), gapRem (default 3). Use for client-logo bands, tickers.
+   - carousel: swipeable image slider with dots/arrows. Required: slides (array of { id, src, caption? } — always give each slide a unique id). Optional: autoplayMs (ms between auto-advances, default 0/off), showDots (default true), showArrows (default true). Use for image galleries, product shots, testimonial rotations.
 5. If creating new elements, give them a unique UUID for the id.
 6. Every element may include an optional layout: { x, y, width, anchor, z }. x/y/width are percentages (0-100); anchor is "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" (default "center"). Omit layout to keep an element centered at its default size — for a background video, omitting layout makes it fill the whole scene.
+7. A scene may include pin: boolean. Omit it (or set true) for a pinned scrubbed set-piece — the scene holds on screen while its elements' start/end scrub tweens play, the current default. Set pin: false for a normal flowing website section whose content should scroll past like a regular page section instead of holding.
+8. In a pin: false flow scene, give elements trigger: "appear" instead of relying on start/end scrub — appear elements fade/slide/scale into place once as they scroll into view. Pair it with appear: { preset, duration, delay, once }. preset is "fade" | "slide-up" | "slide-left" | "scale" | "spring" (default reveal direction/style); duration and delay are seconds (defaults 0.8 and 0); once (default true) plays the reveal a single time — set false to replay every time the element re-enters view. trigger defaults to "scrub" (the existing start/end scroll-scrub behavior) when omitted.
 
-Example — updateSchema args for a 2-scene hero with a background video, a headline, and a parallaxing image:
+Example — updateSchema args for a 2-scene pinned hero (background video, headline, parallaxing image) followed by a pin:false flow section with an appear-revealed card:
 {
   "scenes": [
     {
@@ -121,6 +155,12 @@ Example — updateSchema args for a 2-scene hero with a background video, a head
       "elements": [
         { "id": "e3", "type": "image", "src": "https://example.com/photo.jpg", "layout": { "x": 70, "y": 50, "width": 30 }, "start": 0, "end": 1, "startY": 60, "endY": -60, "startOpacity": 0, "endOpacity": 1 }
       ]
+    },
+    {
+      "id": "s3", "height": 120, "pin": false,
+      "elements": [
+        { "id": "e4", "type": "text", "content": "Feature One", "trigger": "appear", "appear": { "preset": "slide-up", "duration": 0.6 }, "layout": { "x": 20, "y": 50, "width": 25 }, "start": 0, "end": 1, "startY": 0, "endY": 0, "startOpacity": 1, "endOpacity": 1 }
+      ]
     }
   ]
 }
@@ -129,7 +169,7 @@ Example — updateSchema args for a 2-scene hero with a background video, a head
 // AI-output firewall: the live/renderable set (type-drift law) plus the
 // still-recognized placeholder strings from src/types.ts. Anything outside
 // both is dropped rather than passed through to the client.
-const LIVE_ELEMENT_TYPES = new Set(["text", "cube", "glbObject", "image", "video"]);
+const LIVE_ELEMENT_TYPES = new Set(["text", "cube", "glbObject", "image", "video", "marquee", "carousel"]);
 const PLACEHOLDER_ELEMENT_TYPES = new Set([
   "environment",
   "object",
@@ -150,7 +190,7 @@ function sanitizeElement(raw: unknown): Record<string, unknown> | null {
   const type = typeof source.type === "string" ? source.type : "";
   if (!LIVE_ELEMENT_TYPES.has(type) && !PLACEHOLDER_ELEMENT_TYPES.has(type)) return null;
 
-  return {
+  const sanitized: Record<string, unknown> = {
     ...source,
     id: typeof source.id === "string" && source.id ? source.id : crypto.randomUUID(),
     start: coerceNumber(source.start, 0),
@@ -160,6 +200,33 @@ function sanitizeElement(raw: unknown): Record<string, unknown> | null {
     startOpacity: coerceNumber(source.startOpacity, 1),
     endOpacity: coerceNumber(source.endOpacity, 1),
   };
+
+  if (type === "marquee") {
+    const items = Array.isArray(source.items)
+      ? source.items.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+    sanitized.items = items.length > 0 ? items : ["MARQUEE"];
+  }
+
+  if (type === "carousel") {
+    const slides = Array.isArray(source.slides)
+      ? source.slides
+          .filter((slide): slide is Record<string, unknown> => !!slide && typeof slide === "object")
+          .map(slide => {
+            const sanitizedSlide: Record<string, unknown> = {
+              id: typeof slide.id === "string" && slide.id ? slide.id : crypto.randomUUID(),
+              src: typeof slide.src === "string" ? slide.src : "",
+            };
+            if (typeof slide.caption === "string") {
+              sanitizedSlide.caption = slide.caption;
+            }
+            return sanitizedSlide;
+          })
+      : [];
+    sanitized.slides = slides;
+  }
+
+  return sanitized;
 }
 
 function sanitizeScene(raw: unknown): Record<string, unknown> | null {

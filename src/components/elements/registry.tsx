@@ -1,15 +1,17 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Type, Box, Package, Image as ImageIcon, Video } from 'lucide-react';
+import { Type, Box, Package, Image as ImageIcon, Video, MoveHorizontal, GalleryHorizontal } from 'lucide-react';
 import type gsapType from 'gsap';
 import type { ScrollTrigger as ScrollTriggerType } from 'gsap/ScrollTrigger';
-import { ElementType, SceneElement, TextElement, CubeElement, GlbObjectElement, ImageElement, VideoElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../../types';
+import { ElementType, SceneElement, TextElement, CubeElement, GlbObjectElement, ImageElement, VideoElement, MarqueeElement, CarouselElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../../types';
 import type { FieldSpec } from './specs';
 import { TextElementView } from './TextElementView';
 import { CubeElementView } from './CubeElementView';
 import { GlbObjectElementView } from './GlbObjectElementView';
 import { ImageElementView } from './ImageElementView';
 import { VideoElementView } from './VideoElementView';
+import { MarqueeElementView } from './MarqueeElementView';
+import { CarouselElementView } from './CarouselElementView';
 
 export type ScenePolishControls = {
   bloomIntensity: number;
@@ -97,6 +99,28 @@ const ImageDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> 
 
 const VideoDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
   <VideoElementView
+    element={element}
+    gsapInstance={ctx.gsapInstance}
+    scrollTrigger={ctx.scrollTrigger}
+    container={ctx.container}
+    sceneStartPx={ctx.sceneStartPx}
+    sceneHeightPx={ctx.sceneHeightPx}
+  />
+);
+
+const MarqueeDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
+  <MarqueeElementView
+    element={element}
+    gsapInstance={ctx.gsapInstance}
+    scrollTrigger={ctx.scrollTrigger}
+    container={ctx.container}
+    sceneStartPx={ctx.sceneStartPx}
+    sceneHeightPx={ctx.sceneHeightPx}
+  />
+);
+
+const CarouselDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
+  <CarouselElementView
     element={element}
     gsapInstance={ctx.gsapInstance}
     scrollTrigger={ctx.scrollTrigger}
@@ -248,6 +272,80 @@ export const elementRegistry: Partial<Record<ElementType, ElementDefinition>> = 
       src: '',
       mode: 'background',
       loop: true,
+      start: 0,
+      end: 1,
+      startY: 0,
+      endY: 0,
+      startOpacity: 1,
+      endOpacity: 1,
+    }),
+  },
+  marquee: {
+    type: 'marquee',
+    layer: 'dom',
+    label: 'Marquee',
+    icon: MoveHorizontal,
+    Dom: MarqueeDomAdapter,
+    fields: [
+      { key: 'items', label: 'Items', kind: 'list', itemFields: [{ key: 'value', label: 'Text', kind: 'text' }] },
+      { key: 'speedPxPerSec', label: 'Speed (px/s)', kind: 'number', min: 10, max: 400, step: 5 },
+      {
+        key: 'direction',
+        label: 'Direction',
+        kind: 'select',
+        options: [
+          { value: 'left', label: 'Left' },
+          { value: 'right', label: 'Right' },
+        ],
+      },
+      { key: 'gapRem', label: 'Gap (rem)', kind: 'number', min: 0.5, max: 10, step: 0.5 },
+    ],
+    create: (): MarqueeElement => ({
+      id: crypto.randomUUID(),
+      type: 'marquee',
+      items: ['ANIMATION', 'STUDIO', 'PRO'],
+      speedPxPerSec: 80,
+      direction: 'left',
+      gapRem: 3,
+      start: 0,
+      end: 1,
+      startY: 0,
+      endY: 0,
+      startOpacity: 1,
+      endOpacity: 1,
+    }),
+  },
+  carousel: {
+    type: 'carousel',
+    layer: 'dom',
+    label: 'Carousel',
+    icon: GalleryHorizontal,
+    Dom: CarouselDomAdapter,
+    interactive: true,
+    fields: [
+      {
+        key: 'slides',
+        label: 'Slides',
+        kind: 'list',
+        itemFields: [
+          { key: 'src', label: 'Image URL', kind: 'url', placeholder: 'https://...' },
+          { key: 'caption', label: 'Caption', kind: 'text' },
+        ],
+      },
+      { key: 'autoplayMs', label: 'Autoplay (ms)', kind: 'number', min: 0, max: 15000, step: 500 },
+      { key: 'showDots', label: 'Show Dots', kind: 'toggle' },
+      { key: 'showArrows', label: 'Show Arrows', kind: 'toggle' },
+    ],
+    create: (): CarouselElement => ({
+      id: crypto.randomUUID(),
+      type: 'carousel',
+      slides: [
+        { id: crypto.randomUUID(), src: 'https://picsum.photos/seed/carousel1/800/600' },
+        { id: crypto.randomUUID(), src: 'https://picsum.photos/seed/carousel2/800/600' },
+        { id: crypto.randomUUID(), src: 'https://picsum.photos/seed/carousel3/800/600' },
+      ],
+      showDots: true,
+      showArrows: true,
       start: 0,
       end: 1,
       startY: 0,

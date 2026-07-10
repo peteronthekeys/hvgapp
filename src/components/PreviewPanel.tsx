@@ -253,6 +253,17 @@ export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewP
     });
   }, [schema]);
 
+  // Scene heights (and therefore lenis.limit) change whenever schema swaps
+  // in scenes of different heights (e.g. the AI replacing the schema
+  // wholesale). ScrollTrigger/Lenis only recompute on an explicit refresh —
+  // without this, post-swap scroll can undershoot or overshoot the new
+  // content length. rAF delay lets the new scene heights paint first.
+  useEffect(() => {
+    if (!engines) return;
+    const raf = requestAnimationFrame(() => engines.scrollTrigger.refresh());
+    return () => cancelAnimationFrame(raf);
+  }, [schema, engines]);
+
   return (
     <div className="relative h-full w-full bg-slate-900 overflow-hidden">
       {/* 3D Canvas Layer */}
@@ -322,42 +333,69 @@ export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewP
         className="absolute inset-0 overflow-y-auto overflow-x-hidden z-20"
       >
         <div ref={contentRef} className="relative flex flex-col">
-          {sceneLayouts.map((scene, sceneIndex) => (
-            <div
-              key={scene.id}
-              className="relative w-full border-b border-slate-800/30"
-              style={{
-                // The last scene gets one extra viewport of height (scrub math
-                // still uses the un-padded height): scroll ends a viewport short
-                // of the content bottom, so without the pad the final scene's
-                // late-window elements (end near 1) could never complete.
-                height:
-                  viewportPx > 0
-                    ? `${(scene.height / 100) * viewportPx + (sceneIndex === sceneLayouts.length - 1 ? viewportPx : 0)}px`
-                    : `${scene.height}vh`,
-              }}
-            >
-              {/* Sticky container that stays on screen for the duration of the scene's height */}
-              <div
-                className="sticky top-0 w-full overflow-hidden pointer-events-none"
-                style={{ height: viewportPx > 0 ? `${viewportPx}px` : '100vh' }}
-              >
-                <div className="absolute top-4 left-4 text-xs font-mono text-slate-500 uppercase tracking-widest">
-                  Scene {scene.id.slice(0, 6)} ({scene.height}vh)
-                </div>
+          {sceneLayouts.map((scene, sceneIndex) => {
+            // The last scene gets one extra viewport of height (scrub math
+            // still uses the un-padded height): scroll ends a viewport short
+            // of the content bottom, so without the pad the final scene's
+            // late-window elements (end near 1) could never complete. Pad
+            // applies regardless of pin.
+            const outerHeight =
+              viewportPx > 0
+                ? `${(scene.height / 100) * viewportPx + (sceneIndex === sceneLayouts.length - 1 ? viewportPx : 0)}px`
+                : `${scene.height}vh`;
 
-                {engines && (
-                  <SceneDOMObserver
-                    scene={scene}
-                    gsapInstance={engines.gsapInstance}
-                    scrollTrigger={engines.scrollTrigger}
-                    container={containerRef.current}
-                    startVh={scene.startVh}
-                  />
-                )}
+            const sceneLabel = (
+              <div className="absolute top-4 left-4 text-xs font-mono text-slate-500 uppercase tracking-widest">
+                Scene {scene.id.slice(0, 6)} ({scene.height}vh)
               </div>
-            </div>
-          ))}
+            );
+
+            const domObserver = engines && (
+              <SceneDOMObserver
+                scene={scene}
+                gsapInstance={engines.gsapInstance}
+                scrollTrigger={engines.scrollTrigger}
+                container={containerRef.current}
+                startVh={scene.startVh}
+              />
+            );
+
+            // pin:false is a normal document-flow section: no sticky wrapper,
+            // elements render in the section's own flow (still absolutely
+            // positioned within it via PositionedElement). HARD RULE: never
+            // ScrollTrigger.pin here — the sticky wrapper below IS the pin
+            // mechanism for pinned scenes, and flow scenes opt out of it
+            // entirely rather than pinning some other way.
+            if (scene.pin === false) {
+              return (
+                <div
+                  key={scene.id}
+                  className="relative w-full border-b border-slate-800/30"
+                  style={{ height: outerHeight }}
+                >
+                  {sceneLabel}
+                  {domObserver}
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={scene.id}
+                className="relative w-full border-b border-slate-800/30"
+                style={{ height: outerHeight }}
+              >
+                {/* Sticky container that stays on screen for the duration of the scene's height */}
+                <div
+                  className="sticky top-0 w-full overflow-hidden pointer-events-none"
+                  style={{ height: viewportPx > 0 ? `${viewportPx}px` : '100vh' }}
+                >
+                  {sceneLabel}
+                  {domObserver}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -439,6 +477,40 @@ function SceneDOMObserver({
         if (!VideoDom) return null;
         return (
           <VideoDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'marquee').map(el => {
+        const MarqueeDom = elementRegistry.marquee?.Dom;
+        if (!MarqueeDom) return null;
+        return (
+          <MarqueeDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'carousel').map(el => {
+        const CarouselDom = elementRegistry.carousel?.Dom;
+        if (!CarouselDom) return null;
+        return (
+          <CarouselDom
             key={el.id}
             element={el}
             ctx={{

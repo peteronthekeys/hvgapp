@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { VideoElement, SceneElement } from '../../types';
 import type gsapType from 'gsap';
 import type { ScrollTrigger as ScrollTriggerType } from 'gsap/ScrollTrigger';
@@ -38,7 +38,7 @@ export function VideoElementView({
   const sizeClass = video.layout?.width !== undefined ? 'w-full h-auto' : 'max-w-[40vw]';
 
   return (
-    <PositionedElement element={element} ctx={ctx}>
+    <PositionedElement element={element} ctx={ctx} interactive={mode === 'clickToPlay'}>
       {mode === 'background' ? (
         <video
           src={video.src}
@@ -75,19 +75,46 @@ function FullBleedBackgroundVideo({ element, ctx }: { element: VideoElement; ctx
   );
 }
 
-// Click-to-play is visually obvious but inert for now — no click handler
-// or interactive flag until Wave 2 wires playback.
+// Real click-to-play toggle: the video renders directly (poster attribute
+// covers the pre-play frame, no separate <img> poster layer), no autoplay,
+// no native controls. `paused` tracks the video's actual play state via
+// onPlay/onPause (not a click-driven guess) so the glyph stays correct even
+// if playback ends or is controlled elsewhere.
 function ClickToPlayPoster({ video, sizeClass }: { video: VideoElement; sizeClass: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [paused, setPaused] = useState(true);
+
+  const handleClick = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (el.paused) {
+      el.play();
+    } else {
+      el.pause();
+    }
+  };
+
   return (
-    <div className={`${sizeClass} relative rounded-lg overflow-hidden bg-slate-900 pointer-events-none`}>
-      {video.poster ? (
-        <img src={video.poster} alt="" draggable={false} className="w-full h-auto block" />
-      ) : (
-        <video src={video.src} muted playsInline className="w-full h-auto block" />
+    <div
+      className={`${sizeClass} relative rounded-lg overflow-hidden bg-slate-900 cursor-pointer`}
+      onClick={handleClick}
+    >
+      <video
+        ref={videoRef}
+        src={video.src}
+        poster={video.poster}
+        controls={false}
+        loop={video.loop ?? true}
+        playsInline
+        className="w-full h-auto block"
+        onPlay={() => setPaused(false)}
+        onPause={() => setPaused(true)}
+      />
+      {paused && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-0 h-0 border-y-[14px] border-y-transparent border-l-[22px] border-l-white/90 ml-1" />
+        </div>
       )}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-0 h-0 border-y-[14px] border-y-transparent border-l-[22px] border-l-white/90 ml-1" />
-      </div>
     </div>
   );
 }
