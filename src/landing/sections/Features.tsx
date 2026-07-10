@@ -40,11 +40,10 @@ const FEATURES = [
   },
   {
     icon: Clapperboard,
-    title: 'Export to code',
-    body: 'Frame-stepper and FPS controls are already in the navbar. Clip export is next.',
+    title: 'Export site & video',
+    body: 'Download your project as a self-contained HTML file, or record a WebM clip straight from the studio.',
     span: 'md:col-span-3',
     accent: 'text-emerald-400',
-    soon: true,
   },
 ];
 
@@ -106,11 +105,6 @@ export function Features({
               </div>
               <h3 className="mt-5 text-lg font-semibold text-slate-100 flex items-center gap-2">
                 {feature.title}
-                {feature.soon && (
-                  <span className="font-mono text-[9px] uppercase tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full px-2 py-0.5">
-                    soon
-                  </span>
-                )}
               </h3>
               <p className="mt-2 text-sm text-slate-400 leading-relaxed">{feature.body}</p>
             </article>

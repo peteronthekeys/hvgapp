@@ -21,6 +21,11 @@ async function startServer() {
   });
 
   if (process.env.NODE_ENV !== "production") {
+    // Serve the standalone player build (after `npm run build:player`) so the
+    // export feature can fetch /player/player.js locally in dev, same as prod.
+    // Mounted before the Vite middleware so it takes precedence over the SPA.
+    app.use("/player", express.static(path.join(process.cwd(), "dist/player"), { fallthrough: true }));
+
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

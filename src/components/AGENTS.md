@@ -10,6 +10,7 @@ UI components for editing, previewing, and AI-updating the animation schema.
 - `elements/` owns element rendering: `registry.tsx` is the single map from `ElementType` to renderer (`layer: 'dom' | 'r3f'`), editor `fields: FieldSpec[]`, `create()` factory, and `interactive` flag; `progress.ts` owns `getElementProgress` and the shared `ScrollProgressContext`; one `<Type>ElementView.tsx` per renderable type.
 - `EditorPanel.tsx` and `SceneEditor.tsx` create and arrange schema elements; `ElementEditor.tsx` is a generic form renderer driven by `FieldSpec`s from the registry — new types get editor UI by declaring fields, not by editing ElementEditor.
 - `ChatPanel.tsx` sends schema updates through the server-side AI loop; all schema writes funnel through `App.tsx`'s `applySchema` (migrate-on-write).
+- `PlaybackOverlay.tsx` is the fullscreen clean-playback + WebM tab-capture surface, mounted by `App.tsx` when the navbar Play button is clicked; it mounts its own `embedded` `PreviewPanel` (the studio's preview column unmounts while it is open so no hidden canvas burns GPU during capture). Recording uses `getDisplayMedia` (Chromium-only) with a graceful text-only fallback notice on unsupported browsers.
 
 ## Local Contracts
 

@@ -8,8 +8,10 @@ import { ProjectSchema } from './types';
 import { migrateSchema } from './schema/migrate';
 import { EditorPanel } from './components/EditorPanel';
 import { PreviewPanel, PreviewPlaybackHandle } from './components/PreviewPanel';
+import { PlaybackOverlay } from './components/PlaybackOverlay';
 import { ChatPanel } from './components/ChatPanel';
-import { PanelLeftOpen, PanelRightOpen, PanelLeftClose, PanelRightClose, Mountain, Box, Users, Activity, Wind, Type, Component, Play, StepBack, StepForward, Image as ImageIcon, Video, Link, FileText, Music } from 'lucide-react';
+import { PanelLeftOpen, PanelRightOpen, PanelLeftClose, PanelRightClose, Mountain, Box, Users, Activity, Wind, Type, Component, Play, StepBack, StepForward, Image as ImageIcon, Video, Link, FileText, Music, Download } from 'lucide-react';
+import { exportSite } from './export/exportSite';
 
 const INITIAL_SCHEMA: ProjectSchema = {
   scenes: [
@@ -53,6 +55,7 @@ export default function App() {
   const [activeResourceTab, setActiveResourceTab] = useState<string | null>(null);
   const [scrub, setScrub] = useState(1);
   const [fps, setFps] = useState(30);
+  const [isPlayback, setIsPlayback] = useState(false);
   const studioPlaybackRef = useRef<PreviewPlaybackHandle | null>(null);
 
   const applySchema = useCallback((next: unknown) => setSchema(migrateSchema(next)), []);
@@ -163,7 +166,7 @@ export default function App() {
         
         {/* Center - Absolute for perfect centering */}
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 w-[33vw]">
-          <button className="text-emerald-400 hover:text-emerald-300 transition-colors flex items-center justify-center w-8 h-8 shrink-0 rounded hover:bg-slate-800" title="Play/Pause">
+          <button onClick={() => setIsPlayback(true)} className="text-emerald-400 hover:text-emerald-300 transition-colors flex items-center justify-center w-8 h-8 shrink-0 rounded hover:bg-slate-800" title="Play/Pause">
             <Play size={16} fill="currentColor" />
           </button>
           
@@ -210,6 +213,20 @@ export default function App() {
 
         {/* Far Right */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              exportSite(schema).catch((err: unknown) => {
+                window.alert(err instanceof Error ? err.message : 'Export failed');
+              });
+            }}
+            className="text-slate-400 hover:text-emerald-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-slate-800"
+            title="Export site"
+          >
+            <Download size={16} />
+          </button>
+
+          <div className="w-px h-5 bg-slate-800 mx-2"></div>
+
           {resourceTypes.map(({ id, icon: Icon, label }) => (
             <button 
               key={id}
@@ -293,9 +310,13 @@ export default function App() {
         )}
 
         {/* Preview Column */}
-        <div className="flex-1 relative z-10 min-w-0 h-full">
-          <PreviewPanel schema={schema} playbackRef={studioPlaybackRef} />
-        </div>
+        {isPlayback ? (
+          <div className="flex-1 relative z-10 min-w-0 h-full bg-slate-950" />
+        ) : (
+          <div className="flex-1 relative z-10 min-w-0 h-full">
+            <PreviewPanel schema={schema} playbackRef={studioPlaybackRef} />
+          </div>
+        )}
 
         {/* Chat Column */}
         {isChatExpanded ? (
@@ -311,6 +332,10 @@ export default function App() {
         ) : null}
 
       </div>
+
+      {isPlayback && (
+        <PlaybackOverlay schema={schema} fps={fps} onClose={() => setIsPlayback(false)} />
+      )}
     </div>
   );
 }

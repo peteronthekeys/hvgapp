@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "vite build",
+  "buildCommand": "vite build && vite build --config vite.player.config.ts",
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
