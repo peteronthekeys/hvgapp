@@ -1,9 +1,9 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Type, Box, Package, Image as ImageIcon, Video, MoveHorizontal, GalleryHorizontal } from 'lucide-react';
+import { Type, Box, Package, Image as ImageIcon, Video, MoveHorizontal, GalleryHorizontal, Hash, PenTool, LayoutGrid, Images } from 'lucide-react';
 import type gsapType from 'gsap';
 import type { ScrollTrigger as ScrollTriggerType } from 'gsap/ScrollTrigger';
-import { ElementType, SceneElement, TextElement, CubeElement, GlbObjectElement, ImageElement, VideoElement, MarqueeElement, CarouselElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../../types';
+import { ElementType, SceneElement, TextElement, CubeElement, GlbObjectElement, ImageElement, VideoElement, MarqueeElement, CarouselElement, CounterElement, SvgElement, GridElement, GalleryElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../../types';
 import type { FieldSpec } from './specs';
 import { TextElementView } from './TextElementView';
 import { CubeElementView } from './CubeElementView';
@@ -12,6 +12,10 @@ import { ImageElementView } from './ImageElementView';
 import { VideoElementView } from './VideoElementView';
 import { MarqueeElementView } from './MarqueeElementView';
 import { CarouselElementView } from './CarouselElementView';
+import { CounterElementView } from './CounterElementView';
+import { SvgElementView } from './SvgElementView';
+import { GridElementView } from './GridElementView';
+import { GalleryElementView } from './GalleryElementView';
 
 export type ScenePolishControls = {
   bloomIntensity: number;
@@ -121,6 +125,50 @@ const MarqueeDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }
 
 const CarouselDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
   <CarouselElementView
+    element={element}
+    gsapInstance={ctx.gsapInstance}
+    scrollTrigger={ctx.scrollTrigger}
+    container={ctx.container}
+    sceneStartPx={ctx.sceneStartPx}
+    sceneHeightPx={ctx.sceneHeightPx}
+  />
+);
+
+const CounterDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
+  <CounterElementView
+    element={element}
+    gsapInstance={ctx.gsapInstance}
+    scrollTrigger={ctx.scrollTrigger}
+    container={ctx.container}
+    sceneStartPx={ctx.sceneStartPx}
+    sceneHeightPx={ctx.sceneHeightPx}
+  />
+);
+
+const SvgDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
+  <SvgElementView
+    element={element}
+    gsapInstance={ctx.gsapInstance}
+    scrollTrigger={ctx.scrollTrigger}
+    container={ctx.container}
+    sceneStartPx={ctx.sceneStartPx}
+    sceneHeightPx={ctx.sceneHeightPx}
+  />
+);
+
+const GridDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
+  <GridElementView
+    element={element}
+    gsapInstance={ctx.gsapInstance}
+    scrollTrigger={ctx.scrollTrigger}
+    container={ctx.container}
+    sceneStartPx={ctx.sceneStartPx}
+    sceneHeightPx={ctx.sceneHeightPx}
+  />
+);
+
+const GalleryDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
+  <GalleryElementView
     element={element}
     gsapInstance={ctx.gsapInstance}
     scrollTrigger={ctx.scrollTrigger}
@@ -346,6 +394,131 @@ export const elementRegistry: Partial<Record<ElementType, ElementDefinition>> = 
       ],
       showDots: true,
       showArrows: true,
+      start: 0,
+      end: 1,
+      startY: 0,
+      endY: 0,
+      startOpacity: 1,
+      endOpacity: 1,
+    }),
+  },
+  counter: {
+    type: 'counter',
+    layer: 'dom',
+    label: 'Counter',
+    icon: Hash,
+    Dom: CounterDomAdapter,
+    fields: [
+      { key: 'from', label: 'From', kind: 'number', step: 1 },
+      { key: 'to', label: 'To', kind: 'number', step: 1 },
+      { key: 'decimals', label: 'Decimals', kind: 'number', min: 0, max: 4, step: 1 },
+      { key: 'prefix', label: 'Prefix', kind: 'text' },
+      { key: 'suffix', label: 'Suffix', kind: 'text' },
+    ],
+    create: (): CounterElement => ({
+      id: crypto.randomUUID(),
+      type: 'counter',
+      from: 0,
+      to: 100,
+      start: 0.1,
+      end: 0.6,
+      startY: 0,
+      endY: 0,
+      startOpacity: 1,
+      endOpacity: 1,
+    }),
+  },
+  svg: {
+    type: 'svg',
+    layer: 'dom',
+    label: 'SVG Draw',
+    icon: PenTool,
+    Dom: SvgDomAdapter,
+    fields: [
+      { key: 'paths', label: 'Paths', kind: 'list', itemFields: [{ key: 'value', label: 'Path (d)', kind: 'textarea' }] },
+      { key: 'viewBox', label: 'View Box', kind: 'text' },
+      { key: 'strokeColor', label: 'Stroke Color', kind: 'color' },
+      { key: 'strokeWidth', label: 'Stroke Width', kind: 'number', min: 0.5, max: 20, step: 0.5 },
+    ],
+    create: (): SvgElement => ({
+      id: crypto.randomUUID(),
+      type: 'svg',
+      paths: ['M10 50 Q50 10 90 50'],
+      viewBox: '0 0 100 60',
+      start: 0,
+      end: 1,
+      startY: 0,
+      endY: 0,
+      startOpacity: 1,
+      endOpacity: 1,
+    }),
+  },
+  grid: {
+    type: 'grid',
+    layer: 'dom',
+    label: 'Grid',
+    icon: LayoutGrid,
+    Dom: GridDomAdapter,
+    fields: [
+      { key: 'columns', label: 'Columns', kind: 'number', min: 1, max: 6, step: 1 },
+      {
+        key: 'cards',
+        label: 'Cards',
+        kind: 'list',
+        itemFields: [
+          { key: 'title', label: 'Title', kind: 'text' },
+          { key: 'body', label: 'Body', kind: 'textarea' },
+          { key: 'imageSrc', label: 'Image URL', kind: 'url', placeholder: 'https://...' },
+        ],
+      },
+    ],
+    create: (): GridElement => ({
+      id: crypto.randomUUID(),
+      type: 'grid',
+      columns: 3,
+      cards: [
+        { id: crypto.randomUUID(), title: 'Feature A' },
+        { id: crypto.randomUUID(), title: 'Feature B' },
+        { id: crypto.randomUUID(), title: 'Feature C' },
+      ],
+      start: 0,
+      end: 1,
+      startY: 0,
+      endY: 0,
+      startOpacity: 1,
+      endOpacity: 1,
+    }),
+  },
+  gallery: {
+    type: 'gallery',
+    layer: 'dom',
+    label: 'Gallery',
+    icon: Images,
+    Dom: GalleryDomAdapter,
+    interactive: true,
+    fields: [
+      { key: 'columns', label: 'Columns', kind: 'number', min: 1, max: 6, step: 1 },
+      { key: 'lightbox', label: 'Lightbox', kind: 'toggle' },
+      {
+        key: 'images',
+        label: 'Images',
+        kind: 'list',
+        itemFields: [
+          { key: 'src', label: 'Image URL', kind: 'url', placeholder: 'https://...' },
+          { key: 'alt', label: 'Alt text', kind: 'text' },
+        ],
+      },
+    ],
+    create: (): GalleryElement => ({
+      id: crypto.randomUUID(),
+      type: 'gallery',
+      columns: 3,
+      lightbox: true,
+      images: [
+        { id: crypto.randomUUID(), src: 'https://picsum.photos/seed/gallery1/800/800' },
+        { id: crypto.randomUUID(), src: 'https://picsum.photos/seed/gallery2/800/800' },
+        { id: crypto.randomUUID(), src: 'https://picsum.photos/seed/gallery3/800/800' },
+      ],
       start: 0,
       end: 1,
       startY: 0,

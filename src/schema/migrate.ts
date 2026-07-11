@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ProjectSchema, Scene, SceneElement, CarouselSlide, SCHEMA_VERSION } from '../types';
+import { ProjectSchema, Scene, SceneElement, CarouselSlide, GridCard, GalleryImage, SCHEMA_VERSION } from '../types';
 
 const DEFAULT_SCENE_HEIGHT = 100;
 const MIN_SCENE_HEIGHT = 10;
@@ -51,6 +51,26 @@ function migrateMarqueeItems(raw: unknown): string[] {
   return items.length > 0 ? items : ['MARQUEE'];
 }
 
+// Same {value} row -> plain string normalization as migrateMarqueeItems, but
+// for SvgElement.paths — defaults to a flat horizontal line rather than
+// marquee's text fallback when empty.
+function migrateSvgPaths(raw: unknown): string[] {
+  const paths = Array.isArray(raw)
+    ? raw
+        .map(item => {
+          if (typeof item === 'string') return item;
+          if (item && typeof item === 'object' && typeof (item as Record<string, unknown>).value === 'string') {
+            return (item as Record<string, unknown>).value as string;
+          }
+          return '';
+        })
+        .map(item => item.trim())
+        .filter(Boolean)
+    : [];
+
+  return paths.length > 0 ? paths : ['M10 50 L90 50'];
+}
+
 // Normalizes carousel slides: drops non-object rows, ensures every slide has
 // an id (randomUUID when missing), coerces src to a string, and keeps caption
 // only when it's already a string. An empty array is a valid result — unlike
@@ -68,6 +88,48 @@ function migrateCarouselSlides(raw: unknown): CarouselSlide[] {
         slide.caption = source.caption;
       }
       return slide;
+    });
+}
+
+// Normalizes grid cards: drops non-object rows, ensures every card has an id
+// (randomUUID when missing) and a title, coerces body/imageSrc to strings
+// only when already strings. Mirrors migrateCarouselSlides' shape-coercion
+// approach.
+function migrateGridCards(raw: unknown): GridCard[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map(source => {
+      const card: GridCard = {
+        id: typeof source.id === 'string' && source.id ? source.id : crypto.randomUUID(),
+        title: typeof source.title === 'string' ? source.title : '',
+      };
+      if (typeof source.body === 'string') {
+        card.body = source.body;
+      }
+      if (typeof source.imageSrc === 'string') {
+        card.imageSrc = source.imageSrc;
+      }
+      return card;
+    });
+}
+
+// Normalizes gallery images: drops non-object rows, ensures every image has
+// an id (randomUUID when missing), coerces src to a string, and keeps alt
+// only when it's already a string. Mirrors migrateCarouselSlides.
+function migrateGalleryImages(raw: unknown): GalleryImage[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map(source => {
+      const image: GalleryImage = {
+        id: typeof source.id === 'string' && source.id ? source.id : crypto.randomUUID(),
+        src: typeof source.src === 'string' ? source.src : '',
+      };
+      if (typeof source.alt === 'string') {
+        image.alt = source.alt;
+      }
+      return image;
     });
 }
 
@@ -112,6 +174,28 @@ function migrateElement(raw: unknown): SceneElement {
     migrated.slides = migrateCarouselSlides(source.slides);
     if (typeof source.autoplayMs === 'number') {
       migrated.autoplayMs = clamp(source.autoplayMs, 0, 30000);
+    }
+  }
+  if (source.type === 'counter') {
+    migrated.from = coerceNumber(source.from, 0);
+    migrated.to = coerceNumber(source.to, 100);
+    if (typeof source.decimals === 'number') {
+      migrated.decimals = clamp(Math.round(source.decimals), 0, 4);
+    }
+  }
+  if (source.type === 'svg') {
+    migrated.paths = migrateSvgPaths(source.paths);
+  }
+  if (source.type === 'grid') {
+    migrated.cards = migrateGridCards(source.cards);
+    if (typeof source.columns === 'number') {
+      migrated.columns = clamp(Math.round(source.columns), 1, 6);
+    }
+  }
+  if (source.type === 'gallery') {
+    migrated.images = migrateGalleryImages(source.images);
+    if (typeof source.columns === 'number') {
+      migrated.columns = clamp(Math.round(source.columns), 1, 6);
     }
   }
   if (source.type === 'text') {

@@ -523,6 +523,74 @@ function SceneDOMObserver({
           />
         );
       })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'counter').map(el => {
+        const CounterDom = elementRegistry.counter?.Dom;
+        if (!CounterDom) return null;
+        return (
+          <CounterDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'svg').map(el => {
+        const SvgDom = elementRegistry.svg?.Dom;
+        if (!SvgDom) return null;
+        return (
+          <SvgDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'grid').map(el => {
+        const GridDom = elementRegistry.grid?.Dom;
+        if (!GridDom) return null;
+        return (
+          <GridDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'gallery').map(el => {
+        const GalleryDom = elementRegistry.gallery?.Dom;
+        if (!GalleryDom) return null;
+        return (
+          <GalleryDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

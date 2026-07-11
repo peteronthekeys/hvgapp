@@ -4,13 +4,14 @@ export const DEFAULT_GLB_OBJECT_MODEL_PATH = '/models/scroll-orb.glb';
 // upgrades older/malformed schemas to this version on load.
 export const SCHEMA_VERSION = 2;
 
-// 'text', 'cube', 'glbObject', 'image', 'video', 'marquee', and 'carousel'
-// (7) are the only types with a real renderer (see PreviewPanel.tsx) and the
-// only types the AI can emit (see server/gemini.ts updateSchema). The rest
-// are editor-only placeholders: creatable/draggable in EditorPanel.tsx but
-// invisible in the preview. Adding a new type to this union does not make it
-// render or make the AI aware of it — follow .claude/skills/new-element-type/SKILL.md.
-export type ElementType = 'text' | 'cube' | 'glbObject' | 'image' | 'video' | 'marquee' | 'carousel' | 'environment' | 'object' | 'character' | 'action' | 'motion' | 'font' | 'component';
+// 'text', 'cube', 'glbObject', 'image', 'video', 'marquee', 'carousel',
+// 'counter', 'svg', 'grid', and 'gallery' (11) are the only types with a real
+// renderer (see PreviewPanel.tsx) and the only types the AI can emit (see
+// server/gemini.ts updateSchema). The rest are editor-only placeholders:
+// creatable/draggable in EditorPanel.tsx but invisible in the preview. Adding
+// a new type to this union does not make it render or make the AI aware of
+// it — follow .claude/skills/new-element-type/SKILL.md.
+export type ElementType = 'text' | 'cube' | 'glbObject' | 'image' | 'video' | 'marquee' | 'carousel' | 'counter' | 'svg' | 'grid' | 'gallery' | 'environment' | 'object' | 'character' | 'action' | 'motion' | 'font' | 'component';
 
 // Positioning for DOM element renderers, layered on top of the scroll-scrub
 // animation. All fields are optional; absence means centered default at
@@ -125,11 +126,72 @@ export interface CarouselElement extends BaseElement {
   showArrows?: boolean; // default true
 }
 
+// Animated number that counts from `from` to `to` as the user scrolls
+// through the element's start/end window (scrub) or once on viewport entry
+// (trigger 'appear') — see CounterElementView.tsx.
+export interface CounterElement extends BaseElement {
+  type: 'counter';
+  from: number;
+  to: number;
+  decimals?: number; // default 0
+  prefix?: string;
+  suffix?: string;
+}
+
+// Line-art that draws itself (stroke-dashoffset animated to 0) over the
+// element's scrub window — see SvgElementView.tsx. paths is the canonical
+// string[] of SVG path `d` attributes; the editor's generic 'list' field
+// works on object rows, so migrateSchema normalizes any {value} rows it
+// produces back to plain strings on every schema write (mirrors
+// MarqueeElement.items).
+export interface SvgElement extends BaseElement {
+  type: 'svg';
+  paths: string[];
+  viewBox?: string; // default '0 0 100 100'
+  strokeColor?: string; // default '#2dd4bf'
+  strokeWidth?: number; // default 2
+}
+
+// A single card in a GridElement — see GridElementView.tsx.
+export interface GridCard {
+  id: string;
+  title: string;
+  body?: string;
+  imageSrc?: string;
+}
+
+// Responsive CSS-grid of feature/service/team cards — see GridElementView.tsx.
+// Non-interactive (pure display); the whole grid rides the normal
+// scrub/appear wrapper like any other DOM element.
+export interface GridElement extends BaseElement {
+  type: 'grid';
+  columns?: number; // 1-6, default 3
+  cards: GridCard[];
+}
+
+// A single image in a GalleryElement — see GalleryElementView.tsx.
+export interface GalleryImage {
+  id: string;
+  src: string;
+  alt?: string;
+}
+
+// Image grid with a click-to-zoom lightbox — see GalleryElementView.tsx.
+// Registered as `interactive: true` (registry.tsx) so the images and lightbox
+// controls receive pointer events despite the scene layer being
+// pointer-events-none.
+export interface GalleryElement extends BaseElement {
+  type: 'gallery';
+  columns?: number; // 1-6, default 3
+  images: GalleryImage[];
+  lightbox?: boolean; // default true
+}
+
 export interface GenericElement extends BaseElement {
   type: 'environment' | 'object' | 'character' | 'action' | 'motion' | 'font' | 'component';
 }
 
-export type SceneElement = TextElement | CubeElement | GlbObjectElement | ImageElement | VideoElement | MarqueeElement | CarouselElement | GenericElement;
+export type SceneElement = TextElement | CubeElement | GlbObjectElement | ImageElement | VideoElement | MarqueeElement | CarouselElement | CounterElement | SvgElement | GridElement | GalleryElement | GenericElement;
 
 export interface Scene {
   id: string;

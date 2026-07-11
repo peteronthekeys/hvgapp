@@ -43,7 +43,7 @@ const updateSchemaDeclaration = {
                 type: Type.OBJECT,
                 properties: {
                   id: { type: Type.STRING },
-                  type: { type: Type.STRING, enum: ["text", "cube", "glbObject", "image", "video", "marquee", "carousel"] },
+                  type: { type: Type.STRING, enum: ["text", "cube", "glbObject", "image", "video", "marquee", "carousel", "counter", "svg", "grid", "gallery"] },
                   content: { type: Type.STRING },
                   splitMode: { type: Type.STRING, enum: ["none", "chars", "words", "lines"] },
                   staggerEach: { type: Type.NUMBER },
@@ -76,6 +76,42 @@ const updateSchemaDeclaration = {
                   autoplayMs: { type: Type.NUMBER },
                   showDots: { type: Type.BOOLEAN },
                   showArrows: { type: Type.BOOLEAN },
+                  from: { type: Type.NUMBER },
+                  to: { type: Type.NUMBER },
+                  decimals: { type: Type.NUMBER },
+                  prefix: { type: Type.STRING },
+                  suffix: { type: Type.STRING },
+                  paths: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  viewBox: { type: Type.STRING },
+                  strokeColor: { type: Type.STRING },
+                  strokeWidth: { type: Type.NUMBER },
+                  columns: { type: Type.NUMBER },
+                  cards: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        id: { type: Type.STRING },
+                        title: { type: Type.STRING },
+                        body: { type: Type.STRING },
+                        imageSrc: { type: Type.STRING },
+                      },
+                      required: ["id", "title"],
+                    },
+                  },
+                  images: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        id: { type: Type.STRING },
+                        src: { type: Type.STRING },
+                        alt: { type: Type.STRING },
+                      },
+                      required: ["id", "src"],
+                    },
+                  },
+                  lightbox: { type: Type.BOOLEAN },
                   trigger: { type: Type.STRING, enum: ["scrub", "appear"] },
                   appear: {
                     type: Type.OBJECT,
@@ -135,6 +171,10 @@ Rules:
    - video: an inline video. Required: src. Optional: poster, mode ("background" | "clickToPlay", default "background"), loop (default true for background). Prefer "background" mode unless the user explicitly wants a play button.
    - marquee: infinite scrolling text/logo strip. Required: items (array of short strings). Optional: speedPxPerSec (default 80), direction ("left" | "right", default "left"), gapRem (default 3). Use for client-logo bands, tickers.
    - carousel: swipeable image slider with dots/arrows. Required: slides (array of { id, src, caption? } — always give each slide a unique id). Optional: autoplayMs (ms between auto-advances, default 0/off), showDots (default true), showArrows (default true). Use for image galleries, product shots, testimonial rotations.
+   - counter: animated number that counts with scroll (or once on appear). Required: from, to. Optional: decimals (default 0), prefix, suffix. Use for stats bands ("4,000,000+ users").
+   - svg: line-art that draws itself as you scroll. Required: paths (array of SVG path "d" strings). Optional: viewBox (default "0 0 100 100"), strokeColor (default "#2dd4bf"), strokeWidth (default 2). Use for underlines, diagrams, decorative strokes.
+   - grid: responsive card grid. Required: cards [{id,title,body?,imageSrc?}]. Use for feature grids, service lists, team cards. Optional: columns (1-6, default 3).
+   - gallery: image grid with a click-to-zoom lightbox. Required: images [{id,src,alt?}]. Use for photo grids, portfolios, product shots. Optional: columns (1-6, default 3), lightbox (default true).
 5. If creating new elements, give them a unique UUID for the id.
 6. Every element may include an optional layout: { x, y, width, anchor, z }. x/y/width are percentages (0-100); anchor is "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" (default "center"). Omit layout to keep an element centered at its default size — for a background video, omitting layout makes it fill the whole scene.
 7. A scene may include pin: boolean. Omit it (or set true) for a pinned scrubbed set-piece — the scene holds on screen while its elements' start/end scrub tweens play, the current default. Set pin: false for a normal flowing website section whose content should scroll past like a regular page section instead of holding.
@@ -169,7 +209,7 @@ Example — updateSchema args for a 2-scene pinned hero (background video, headl
 // AI-output firewall: the live/renderable set (type-drift law) plus the
 // still-recognized placeholder strings from src/types.ts. Anything outside
 // both is dropped rather than passed through to the client.
-const LIVE_ELEMENT_TYPES = new Set(["text", "cube", "glbObject", "image", "video", "marquee", "carousel"]);
+const LIVE_ELEMENT_TYPES = new Set(["text", "cube", "glbObject", "image", "video", "marquee", "carousel", "counter", "svg", "grid", "gallery"]);
 const PLACEHOLDER_ELEMENT_TYPES = new Set([
   "environment",
   "object",
@@ -224,6 +264,63 @@ function sanitizeElement(raw: unknown): Record<string, unknown> | null {
           })
       : [];
     sanitized.slides = slides;
+  }
+
+  if (type === "counter") {
+    sanitized.from = coerceNumber(source.from, 0);
+    sanitized.to = coerceNumber(source.to, 100);
+  }
+
+  if (type === "svg") {
+    const paths = Array.isArray(source.paths)
+      ? source.paths.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+    sanitized.paths = paths.length > 0 ? paths : ["M10 50 L90 50"];
+  }
+
+  if (type === "grid") {
+    const cards = Array.isArray(source.cards)
+      ? source.cards
+          .filter((card): card is Record<string, unknown> => !!card && typeof card === "object")
+          .map(card => {
+            const sanitizedCard: Record<string, unknown> = {
+              id: typeof card.id === "string" && card.id ? card.id : crypto.randomUUID(),
+              title: typeof card.title === "string" ? card.title : "",
+            };
+            if (typeof card.body === "string") {
+              sanitizedCard.body = card.body;
+            }
+            if (typeof card.imageSrc === "string") {
+              sanitizedCard.imageSrc = card.imageSrc;
+            }
+            return sanitizedCard;
+          })
+      : [];
+    sanitized.cards = cards;
+    if (typeof source.columns === "number") {
+      sanitized.columns = Math.min(6, Math.max(1, Math.round(source.columns)));
+    }
+  }
+
+  if (type === "gallery") {
+    const images = Array.isArray(source.images)
+      ? source.images
+          .filter((image): image is Record<string, unknown> => !!image && typeof image === "object")
+          .map(image => {
+            const sanitizedImage: Record<string, unknown> = {
+              id: typeof image.id === "string" && image.id ? image.id : crypto.randomUUID(),
+              src: typeof image.src === "string" ? image.src : "",
+            };
+            if (typeof image.alt === "string") {
+              sanitizedImage.alt = image.alt;
+            }
+            return sanitizedImage;
+          })
+      : [];
+    sanitized.images = images;
+    if (typeof source.columns === "number") {
+      sanitized.columns = Math.min(6, Math.max(1, Math.round(source.columns)));
+    }
   }
 
   return sanitized;
