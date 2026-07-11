@@ -1,6 +1,8 @@
 # HVG_ROADMAP.md — Animation Studio Pro: Rulings + Build Plan
 
 > **Status:** ratified rulings + roadmap · 2026-07-06 (Fable 5) · Companion to [HVG_BRIEF.md](HVG_BRIEF.md) (library facts) and [README.md](README.md). Portfolio context: `~/Documents/Obsidian/thecleanstartup/PORTFOLIO.md` — this is portfolio project #3; it gets **one focused build push** during a thecleanstartup wait-state, then a keep/kill checkpoint. This doc is one page on purpose.
+>
+> **2026-07-11 — growth horizon ratified:** [HVG_12MONTH_PLAN.md](HVG_12MONTH_PLAN.md) covers Jul 2026 → Jul 2027 under the keep-verdict premise (quarterly gates, revenue targets, graduation gates back into PORTFOLIO.md). Under that premise it supersedes this doc's "Not now: accounts/billing" line; everything else here stands.
 
 ## Rulings
 
