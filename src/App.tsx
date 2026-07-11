@@ -10,7 +10,8 @@ import { EditorPanel } from './components/EditorPanel';
 import { PreviewPanel, PreviewPlaybackHandle } from './components/PreviewPanel';
 import { PlaybackOverlay } from './components/PlaybackOverlay';
 import { ChatPanel } from './components/ChatPanel';
-import { PanelLeftOpen, PanelRightOpen, PanelLeftClose, PanelRightClose, Mountain, Box, Users, Activity, Wind, Type, Component, Play, StepBack, StepForward, Image as ImageIcon, Video, Link, FileText, Music, Download } from 'lucide-react';
+import { IntegrationsDrawer } from './components/IntegrationsDrawer';
+import { PanelLeftOpen, PanelRightOpen, PanelLeftClose, PanelRightClose, Mountain, Box, Users, Activity, Wind, Type, Component, Play, StepBack, StepForward, Image as ImageIcon, Video, Link, FileText, Music, Download, Plug } from 'lucide-react';
 import { exportSite } from './export/exportSite';
 
 const INITIAL_SCHEMA: ProjectSchema = {
@@ -56,6 +57,7 @@ export default function App() {
   const [scrub, setScrub] = useState(1);
   const [fps, setFps] = useState(30);
   const [isPlayback, setIsPlayback] = useState(false);
+  const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false);
   const studioPlaybackRef = useRef<PreviewPlaybackHandle | null>(null);
 
   const applySchema = useCallback((next: unknown) => setSchema(migrateSchema(next)), []);
@@ -225,6 +227,14 @@ export default function App() {
             <Download size={16} />
           </button>
 
+          <button
+            onClick={() => setIsIntegrationsOpen(!isIntegrationsOpen)}
+            className={`text-slate-400 hover:text-emerald-400 transition-colors flex items-center justify-center w-8 h-8 rounded hover:bg-slate-800 ${isIntegrationsOpen ? 'bg-slate-800 text-emerald-400' : ''}`}
+            title="Integrations"
+          >
+            <Plug size={16} />
+          </button>
+
           <div className="w-px h-5 bg-slate-800 mx-2"></div>
 
           {resourceTypes.map(({ id, icon: Icon, label }) => (
@@ -335,6 +345,10 @@ export default function App() {
 
       {isPlayback && (
         <PlaybackOverlay schema={schema} fps={fps} onClose={() => setIsPlayback(false)} />
+      )}
+
+      {isIntegrationsOpen && (
+        <IntegrationsDrawer schema={schema} onChange={applySchema} onClose={() => setIsIntegrationsOpen(false)} />
       )}
     </div>
   );

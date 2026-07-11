@@ -5,13 +5,14 @@ export const DEFAULT_GLB_OBJECT_MODEL_PATH = '/models/scroll-orb.glb';
 export const SCHEMA_VERSION = 2;
 
 // 'text', 'cube', 'glbObject', 'image', 'video', 'marquee', 'carousel',
-// 'counter', 'svg', 'grid', 'gallery', and 'lottie' (12) are the only types
-// with a real renderer (see PreviewPanel.tsx) and the only types the AI can
-// emit (see server/gemini.ts updateSchema). The rest are editor-only
-// placeholders: creatable/draggable in EditorPanel.tsx but invisible in the
-// preview. Adding a new type to this union does not make it render or make
-// the AI aware of it — follow .claude/skills/new-element-type/SKILL.md.
-export type ElementType = 'text' | 'cube' | 'glbObject' | 'image' | 'video' | 'marquee' | 'carousel' | 'counter' | 'svg' | 'grid' | 'gallery' | 'lottie' | 'environment' | 'object' | 'character' | 'action' | 'motion' | 'font' | 'component';
+// 'counter', 'svg', 'grid', 'gallery', 'lottie', 'form', and 'map' (14) are
+// the only types with a real renderer (see PreviewPanel.tsx) and the only
+// types the AI can emit (see server/gemini.ts updateSchema). The rest are
+// editor-only placeholders: creatable/draggable in EditorPanel.tsx but
+// invisible in the preview. Adding a new type to this union does not make it
+// render or make the AI aware of it — follow
+// .claude/skills/new-element-type/SKILL.md.
+export type ElementType = 'text' | 'cube' | 'glbObject' | 'image' | 'video' | 'marquee' | 'carousel' | 'counter' | 'svg' | 'grid' | 'gallery' | 'lottie' | 'form' | 'map' | 'environment' | 'object' | 'character' | 'action' | 'motion' | 'font' | 'component';
 
 // Positioning for DOM element renderers, layered on top of the scroll-scrub
 // animation. All fields are optional; absence means centered default at
@@ -200,11 +201,47 @@ export interface LottieElement extends BaseElement {
   loop?: boolean; // autoplay mode only; default true
 }
 
+// A single input in a FormElement — see FormElementView.tsx.
+export interface FormField {
+  id: string;
+  label: string;
+  kind: 'text' | 'email' | 'textarea';
+  required?: boolean;
+}
+
+// Contact/signup form — see FormElementView.tsx. Registered as
+// `interactive: true` (registry.tsx) so its inputs/button receive pointer
+// events despite the scene layer being pointer-events-none. Submissions post
+// to ctx.integrations?.formEndpoint (see the DomRendererCtx plumbing note in
+// registry.tsx); with no endpoint configured the renderer shows an inline
+// notice instead of posting.
+export interface FormElement extends BaseElement {
+  type: 'form';
+  fields: FormField[];
+  title?: string;
+  submitLabel?: string; // default "Send"
+  successMessage?: string; // default "Thanks — we'll be in touch."
+}
+
+// Embedded Google map — see MapElementView.tsx. Registered as
+// `interactive: true` (registry.tsx) so pan/zoom gestures reach the iframe;
+// its wrapper carries data-lenis-prevent so Lenis doesn't hijack them (same
+// law as the carousel's horizontal scroller). Uses the keyless Google Maps
+// embed URL by default, or the Maps Embed API when
+// ctx.integrations?.googleMapsApiKey is set — see MapElementView.tsx.
+export interface MapElement extends BaseElement {
+  type: 'map';
+  lat: number;
+  lng: number;
+  zoom?: number; // default 12, clamped 1-20
+  markerLabel?: string; // optional place label shown via the q= param
+}
+
 export interface GenericElement extends BaseElement {
   type: 'environment' | 'object' | 'character' | 'action' | 'motion' | 'font' | 'component';
 }
 
-export type SceneElement = TextElement | CubeElement | GlbObjectElement | ImageElement | VideoElement | MarqueeElement | CarouselElement | CounterElement | SvgElement | GridElement | GalleryElement | LottieElement | GenericElement;
+export type SceneElement = TextElement | CubeElement | GlbObjectElement | ImageElement | VideoElement | MarqueeElement | CarouselElement | CounterElement | SvgElement | GridElement | GalleryElement | LottieElement | FormElement | MapElement | GenericElement;
 
 export interface Scene {
   id: string;
@@ -217,7 +254,39 @@ export interface Scene {
   pin?: boolean;
 }
 
+export interface SiteLink {
+  label: string;
+  href: string;
+}
+
+// Page-level chrome layered around the scroll animation: theme colors/font,
+// a sticky nav bar, a footer, a custom cursor, and a loading gate for the
+// standalone player. Rendered by SiteChrome (src/components/site/) and
+// wired additively into PreviewPanel.tsx — every field is optional and an
+// absent `site` produces identical output to pre-Wave-5.1 schemas. See
+// src/schema/migrate.ts's migrateSite for clamping rules.
+export interface SiteConfig {
+  theme?: { background?: string; text?: string; accent?: string; fontFamily?: string };
+  nav?: { logoText?: string; links?: SiteLink[] };
+  footer?: { text?: string; links?: SiteLink[] };
+  cursor?: { style: 'default' | 'dot' | 'glow'; color?: string };
+  loadingGate?: { enabled: boolean; text?: string; minMs?: number };
+}
+
+// User-managed public site keys, set via the studio's Integrations drawer
+// (src/components/IntegrationsDrawer.tsx) — never emitted or touched by the
+// AI (see server/gemini.ts's sanitizeSchema + runChat reattach). These are
+// PUBLIC keys by design (form endpoint, reCAPTCHA v3 site key, Maps API key)
+// and ship as-is in exported HTML; never put a secret key here.
+export interface ProjectIntegrations {
+  formEndpoint?: string;
+  recaptchaSiteKey?: string;
+  googleMapsApiKey?: string;
+}
+
 export interface ProjectSchema {
   version?: number;
   scenes: Scene[];
+  site?: SiteConfig;
+  integrations?: ProjectIntegrations;
 }

@@ -1,5 +1,5 @@
 import React, { Suspense, useRef, useMemo, useEffect, useState, useCallback, useImperativeHandle } from 'react';
-import { ProjectSchema, SceneElement } from '../types';
+import { ProjectSchema, SceneElement, ProjectIntegrations } from '../types';
 import { Canvas } from '@react-three/fiber';
 import { Environment } from '@react-three/drei';
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
@@ -8,6 +8,7 @@ import type { ScrollTrigger as ScrollTriggerType } from 'gsap/ScrollTrigger';
 import type Lenis from 'lenis';
 import { ScrollProgressContext } from './elements/progress';
 import { elementRegistry, ScenePolishControls, DEFAULT_POLISH_CONTROLS } from './elements/registry';
+import { getSiteThemeStyle, SiteNav, SiteFooter, SiteCursor, LoadingGate } from './site/SiteChrome';
 
 export interface PreviewPlaybackHandle {
   /** Scroll from current position to the end over durationSec; resolves on arrival or stop(). */
@@ -94,6 +95,7 @@ function ScenePostProcessing({ polishControls }: { polishControls: ScenePolishCo
 }
 
 export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewPanelProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef({ current: 0 });
@@ -253,6 +255,20 @@ export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewP
     });
   }, [schema]);
 
+  // Site nav's `#scene-<index>` links (SiteChrome.tsx's parseSceneHref) scroll
+  // here — reuses the same Lenis instance and vh->px math as sceneLayouts,
+  // so it stays in sync with however the scenes are currently laid out.
+  const scrollToScene = useCallback(
+    (sceneIndex: number) => {
+      const lenis = lenisRef.current;
+      const scene = sceneLayouts[sceneIndex];
+      if (!lenis || !scene || viewportPx <= 0) return;
+      const targetPx = (scene.startVh / 100) * viewportPx;
+      lenis.scrollTo(targetPx, { duration: 1 });
+    },
+    [sceneLayouts, viewportPx]
+  );
+
   // Scene heights (and therefore lenis.limit) change whenever schema swaps
   // in scenes of different heights (e.g. the AI replacing the schema
   // wholesale). ScrollTrigger/Lenis only recompute on an explicit refresh —
@@ -265,7 +281,11 @@ export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewP
   }, [schema, engines]);
 
   return (
-    <div className="relative h-full w-full bg-slate-900 overflow-hidden">
+    <div
+      ref={wrapperRef}
+      className="relative h-full w-full bg-slate-900 overflow-hidden"
+      style={getSiteThemeStyle(schema.site?.theme)}
+    >
       {/* 3D Canvas Layer */}
       <div className="absolute inset-0 pointer-events-none z-10">
         <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
@@ -333,6 +353,7 @@ export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewP
         className="absolute inset-0 overflow-y-auto overflow-x-hidden z-20"
       >
         <div ref={contentRef} className="relative flex flex-col">
+          {schema.site?.nav && <SiteNav nav={schema.site.nav} onScrollToScene={scrollToScene} />}
           {sceneLayouts.map((scene, sceneIndex) => {
             // The last scene gets one extra viewport of height (scrub math
             // still uses the un-padded height): scroll ends a viewport short
@@ -357,6 +378,7 @@ export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewP
                 scrollTrigger={engines.scrollTrigger}
                 container={containerRef.current}
                 startVh={scene.startVh}
+                integrations={schema.integrations}
               />
             );
 
@@ -396,8 +418,29 @@ export function PreviewPanel({ schema, embedded = false, playbackRef }: PreviewP
               </div>
             );
           })}
+          {/* Footer approach: normal document flow after the last scene, inside
+              the same scrolled content as the scenes. This adds its own height
+              to the total scroll length, but it isn't part of sceneLayouts —
+              per-scene/element start/end scrub math (all vh-cumulative against
+              sceneLayouts) and the last scene's +1-viewport pad are untouched.
+              seek(1) still means "the end": it scrolls to 1 * lenis.limit,
+              and lenis.limit is recomputed off the container's actual
+              scrollHeight (via the ScrollTrigger refresh below, keyed on
+              `schema`) so it already includes the footer once mounted. */}
+          {schema.site?.footer && <SiteFooter footer={schema.site.footer} />}
         </div>
       </div>
+
+      {schema.site?.cursor && (
+        <SiteCursor cursor={schema.site.cursor} wrapperRef={wrapperRef} />
+      )}
+
+      {/* Loading gate is embedded-only (standalone player / playback overlay)
+          — the studio editing preview never shows it, since it would
+          obstruct editing. */}
+      {embedded && schema.site?.loadingGate && (
+        <LoadingGate loadingGate={schema.site.loadingGate} theme={schema.site.theme} />
+      )}
     </div>
   );
 }
@@ -408,12 +451,14 @@ function SceneDOMObserver({
   scrollTrigger,
   container,
   startVh,
+  integrations,
 }: {
   scene: { id: string; height: number; elements: SceneElement[] };
   gsapInstance: typeof gsapType;
   scrollTrigger: typeof ScrollTriggerType;
   container: HTMLDivElement | null;
   startVh: number;
+  integrations?: ProjectIntegrations;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState({ startPx: 0, heightPx: 0 });
@@ -604,6 +649,42 @@ function SceneDOMObserver({
               container,
               sceneStartPx: layout.startPx,
               sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'form').map(el => {
+        const FormDom = elementRegistry.form?.Dom;
+        if (!FormDom) return null;
+        return (
+          <FormDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+              integrations,
+            }}
+          />
+        );
+      })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'map').map(el => {
+        const MapDom = elementRegistry.map?.Dom;
+        if (!MapDom) return null;
+        return (
+          <MapDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+              integrations,
             }}
           />
         );

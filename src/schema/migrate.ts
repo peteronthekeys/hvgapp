@@ -3,11 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ProjectSchema, Scene, SceneElement, CarouselSlide, GridCard, GalleryImage, SCHEMA_VERSION } from '../types';
+import { ProjectSchema, Scene, SceneElement, CarouselSlide, GridCard, GalleryImage, FormField, SiteConfig, SiteLink, ProjectIntegrations, SCHEMA_VERSION } from '../types';
 
 const DEFAULT_SCENE_HEIGHT = 100;
 const MIN_SCENE_HEIGHT = 10;
 const MAX_SCENE_HEIGHT = 2000;
+const MIN_LOADING_GATE_MS = 0;
+const MAX_LOADING_GATE_MS = 10000;
+const MIN_MAP_ZOOM = 1;
+const MAX_MAP_ZOOM = 20;
+const DEFAULT_MAP_LAT = 40.7128;
+const DEFAULT_MAP_LNG = -74.006;
+const DEFAULT_MAP_ZOOM = 12;
+const FORM_FIELD_KINDS = new Set(['text', 'email', 'textarea']);
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -133,6 +141,39 @@ function migrateGalleryImages(raw: unknown): GalleryImage[] {
     });
 }
 
+// Normalizes form fields: drops non-object rows, ensures every field has an
+// id (randomUUID when missing) and a label, coerces kind to the enum
+// (defaulting to 'text'), keeps required only when already boolean, and
+// drops rows with an empty label. Falls back to a name/email/message default
+// set when nothing survives — mirrors migrateMarqueeItems' non-empty
+// fallback (and server/gemini.ts's sanitizeSchema for the AI path).
+function migrateFormFields(raw: unknown): FormField[] {
+  const fields = Array.isArray(raw)
+    ? raw
+        .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+        .map(source => {
+          const field: FormField = {
+            id: typeof source.id === 'string' && source.id ? source.id : crypto.randomUUID(),
+            label: typeof source.label === 'string' ? source.label : '',
+            kind: FORM_FIELD_KINDS.has(source.kind as string) ? (source.kind as FormField['kind']) : 'text',
+          };
+          if (typeof source.required === 'boolean') {
+            field.required = source.required;
+          }
+          return field;
+        })
+        .filter(field => field.label.trim().length > 0)
+    : [];
+
+  if (fields.length > 0) return fields;
+
+  return [
+    { id: crypto.randomUUID(), label: 'Name', kind: 'text', required: true },
+    { id: crypto.randomUUID(), label: 'Email', kind: 'email', required: true },
+    { id: crypto.randomUUID(), label: 'Message', kind: 'textarea' },
+  ];
+}
+
 function migrateElement(raw: unknown): SceneElement {
   const source = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
 
@@ -210,6 +251,14 @@ function migrateElement(raw: unknown): SceneElement {
       migrated.fontSize = clamp(source.fontSize, 0.25, 16);
     }
   }
+  if (source.type === 'form') {
+    migrated.fields = migrateFormFields(source.fields);
+  }
+  if (source.type === 'map') {
+    migrated.lat = clamp(coerceNumber(source.lat, DEFAULT_MAP_LAT), -90, 90);
+    migrated.lng = clamp(coerceNumber(source.lng, DEFAULT_MAP_LNG), -180, 180);
+    migrated.zoom = clamp(Math.round(coerceNumber(source.zoom, DEFAULT_MAP_ZOOM)), MIN_MAP_ZOOM, MAX_MAP_ZOOM);
+  }
 
   // trigger/pin pass through untouched via the `...source` spread above;
   // appear's duration/delay get the same clamp-if-present treatment as the
@@ -227,6 +276,118 @@ function migrateElement(raw: unknown): SceneElement {
   }
 
   return migrated as unknown as SceneElement;
+}
+
+// Site links render as raw <a href> in SiteChrome AND ship into exported
+// standalone HTML, so an unvalidated scheme (javascript:, data:) is XSS on
+// the published site. Allowlist: fragments (#scene-N et al) and
+// http/https/mailto/tel absolute URLs; everything else (including relative
+// paths, meaningless in a single-file export) is blanked like a non-string.
+function safeSiteHref(href: string): string {
+  if (href.startsWith('#')) return href;
+  try {
+    const protocol = new URL(href).protocol;
+    return protocol === 'http:' || protocol === 'https:' || protocol === 'mailto:' || protocol === 'tel:' ? href : '';
+  } catch {
+    return '';
+  }
+}
+
+// Non-array `links` (or an array with no valid rows) becomes undefined
+// rather than an empty array, so a malformed AI/editor write drops the field
+// instead of leaving a link bar with nothing in it.
+function migrateSiteLinks(raw: unknown): SiteLink[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const links = raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map(source => ({
+      label: typeof source.label === 'string' ? source.label : '',
+      href: typeof source.href === 'string' ? safeSiteHref(source.href) : '',
+    }))
+    .filter(link => link.label || link.href);
+  return links.length > 0 ? links : undefined;
+}
+
+// No defaults injected here (unlike scene/element migration) — `site` only
+// passes through fields that are already present, clamping the obviously
+// broken ones. An absent/malformed `site` returns undefined so migrateSchema
+// drops the key entirely, preserving the pre-Wave-5.1 no-site behavior.
+function migrateSite(raw: unknown): SiteConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const source = raw as Record<string, unknown>;
+  const site: Record<string, unknown> = {};
+
+  if (source.theme && typeof source.theme === 'object') {
+    site.theme = { ...(source.theme as Record<string, unknown>) };
+  }
+
+  if (source.nav && typeof source.nav === 'object') {
+    const navSource = source.nav as Record<string, unknown>;
+    const nav: Record<string, unknown> = { ...navSource };
+    const links = migrateSiteLinks(navSource.links);
+    if (links !== undefined) {
+      nav.links = links;
+    } else {
+      delete nav.links;
+    }
+    site.nav = nav;
+  }
+
+  if (source.footer && typeof source.footer === 'object') {
+    const footerSource = source.footer as Record<string, unknown>;
+    const footer: Record<string, unknown> = { ...footerSource };
+    const links = migrateSiteLinks(footerSource.links);
+    if (links !== undefined) {
+      footer.links = links;
+    } else {
+      delete footer.links;
+    }
+    site.footer = footer;
+  }
+
+  if (source.cursor && typeof source.cursor === 'object') {
+    const cursorSource = source.cursor as Record<string, unknown>;
+    const style =
+      cursorSource.style === 'dot' || cursorSource.style === 'glow' || cursorSource.style === 'default'
+        ? cursorSource.style
+        : 'default';
+    site.cursor = { ...cursorSource, style };
+  }
+
+  if (source.loadingGate && typeof source.loadingGate === 'object') {
+    const gateSource = source.loadingGate as Record<string, unknown>;
+    const loadingGate: Record<string, unknown> = {
+      ...gateSource,
+      enabled: typeof gateSource.enabled === 'boolean' ? gateSource.enabled : false,
+    };
+    if (typeof gateSource.minMs === 'number') {
+      loadingGate.minMs = clamp(gateSource.minMs, MIN_LOADING_GATE_MS, MAX_LOADING_GATE_MS);
+    }
+    site.loadingGate = loadingGate;
+  }
+
+  return Object.keys(site).length > 0 ? (site as SiteConfig) : undefined;
+}
+
+// User-owned integrations pass through untouched by the AI (see
+// server/gemini.ts) — this only guards against a malformed/legacy schema on
+// load: keeps string-typed, trimmed, non-empty values, drops the object
+// entirely when nothing survives.
+const INTEGRATION_KEYS: (keyof ProjectIntegrations)[] = ['formEndpoint', 'recaptchaSiteKey', 'googleMapsApiKey'];
+
+function migrateIntegrations(raw: unknown): ProjectIntegrations | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const source = raw as Record<string, unknown>;
+  const integrations: ProjectIntegrations = {};
+
+  for (const key of INTEGRATION_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string' && value.trim()) {
+      integrations[key] = value.trim();
+    }
+  }
+
+  return Object.keys(integrations).length > 0 ? integrations : undefined;
 }
 
 function migrateScene(raw: unknown): Scene {
@@ -250,10 +411,26 @@ export function migrateSchema(raw: unknown): ProjectSchema {
 
   const source = raw as Record<string, unknown>;
   const scenes = (source.scenes as unknown[]).map(migrateScene);
+  const site = migrateSite(source.site);
+  const integrations = migrateIntegrations(source.integrations);
 
-  return {
+  const migrated = {
     ...source,
     version: SCHEMA_VERSION,
     scenes,
   } as ProjectSchema;
+
+  if (site !== undefined) {
+    migrated.site = site;
+  } else {
+    delete migrated.site;
+  }
+
+  if (integrations !== undefined) {
+    migrated.integrations = integrations;
+  } else {
+    delete migrated.integrations;
+  }
+
+  return migrated;
 }

@@ -43,7 +43,7 @@ const updateSchemaDeclaration = {
                 type: Type.OBJECT,
                 properties: {
                   id: { type: Type.STRING },
-                  type: { type: Type.STRING, enum: ["text", "cube", "glbObject", "image", "video", "marquee", "carousel", "counter", "svg", "grid", "gallery", "lottie"] },
+                  type: { type: Type.STRING, enum: ["text", "cube", "glbObject", "image", "video", "marquee", "carousel", "counter", "svg", "grid", "gallery", "lottie", "form", "map"] },
                   content: { type: Type.STRING },
                   splitMode: { type: Type.STRING, enum: ["none", "chars", "words", "lines"] },
                   staggerEach: { type: Type.NUMBER },
@@ -113,6 +113,26 @@ const updateSchemaDeclaration = {
                   },
                   lightbox: { type: Type.BOOLEAN },
                   playMode: { type: Type.STRING, enum: ["scrub", "autoplay"] },
+                  fields: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        id: { type: Type.STRING },
+                        label: { type: Type.STRING },
+                        kind: { type: Type.STRING, enum: ["text", "email", "textarea"] },
+                        required: { type: Type.BOOLEAN },
+                      },
+                      required: ["id", "label", "kind"],
+                    },
+                  },
+                  title: { type: Type.STRING },
+                  submitLabel: { type: Type.STRING },
+                  successMessage: { type: Type.STRING },
+                  lat: { type: Type.NUMBER },
+                  lng: { type: Type.NUMBER },
+                  zoom: { type: Type.NUMBER },
+                  markerLabel: { type: Type.STRING },
                   trigger: { type: Type.STRING, enum: ["scrub", "appear"] },
                   appear: {
                     type: Type.OBJECT,
@@ -150,6 +170,71 @@ const updateSchemaDeclaration = {
           required: ["id", "height", "elements"],
         },
       },
+      site: {
+        type: Type.OBJECT,
+        description:
+          "Optional page-level chrome: theme colors/font, nav bar, footer, cursor style, loading gate. Omit entirely to leave the page chrome absent.",
+        properties: {
+          theme: {
+            type: Type.OBJECT,
+            properties: {
+              background: { type: Type.STRING },
+              text: { type: Type.STRING },
+              accent: { type: Type.STRING },
+              fontFamily: { type: Type.STRING },
+            },
+          },
+          nav: {
+            type: Type.OBJECT,
+            properties: {
+              logoText: { type: Type.STRING },
+              links: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    label: { type: Type.STRING },
+                    href: { type: Type.STRING },
+                  },
+                  required: ["label", "href"],
+                },
+              },
+            },
+          },
+          footer: {
+            type: Type.OBJECT,
+            properties: {
+              text: { type: Type.STRING },
+              links: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    label: { type: Type.STRING },
+                    href: { type: Type.STRING },
+                  },
+                  required: ["label", "href"],
+                },
+              },
+            },
+          },
+          cursor: {
+            type: Type.OBJECT,
+            properties: {
+              style: { type: Type.STRING, enum: ["default", "dot", "glow"] },
+              color: { type: Type.STRING },
+            },
+          },
+          loadingGate: {
+            type: Type.OBJECT,
+            properties: {
+              enabled: { type: Type.BOOLEAN },
+              text: { type: Type.STRING },
+              minMs: { type: Type.NUMBER },
+            },
+          },
+        },
+      },
     },
     required: ["scenes"],
   },
@@ -177,10 +262,14 @@ Rules:
    - grid: responsive card grid. Required: cards [{id,title,body?,imageSrc?}]. Use for feature grids, service lists, team cards. Optional: columns (1-6, default 3).
    - gallery: image grid with a click-to-zoom lightbox. Required: images [{id,src,alt?}]. Use for photo grids, portfolios, product shots. Optional: columns (1-6, default 3), lightbox (default true).
    - lottie: a Lottie/After Effects JSON animation. Required: src (URL to a .json file), playMode ("scrub" | "autoplay"). Optional: loop (autoplay mode only, default true). "scrub" ties animation frames to scroll; "autoplay" plays once the element enters the viewport. Use for icon animations, illustrated micro-interactions.
+   - form: contact/signup form; Required: fields [{id,label,kind:'text'|'email'|'textarea',required?}]. Submissions post to the user's configured form endpoint — never invent endpoints.
+   - map: embedded Google map; Required: lat, lng. Optional zoom (1-20, default 12), markerLabel. Uses the user's Maps key automatically when configured.
 5. If creating new elements, give them a unique UUID for the id.
 6. Every element may include an optional layout: { x, y, width, anchor, z }. x/y/width are percentages (0-100); anchor is "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" (default "center"). Omit layout to keep an element centered at its default size — for a background video, omitting layout makes it fill the whole scene.
 7. A scene may include pin: boolean. Omit it (or set true) for a pinned scrubbed set-piece — the scene holds on screen while its elements' start/end scrub tweens play, the current default. Set pin: false for a normal flowing website section whose content should scroll past like a regular page section instead of holding.
 8. In a pin: false flow scene, give elements trigger: "appear" instead of relying on start/end scrub — appear elements fade/slide/scale into place once as they scroll into view. Pair it with appear: { preset, duration, delay, once }. preset is "fade" | "slide-up" | "slide-left" | "scale" | "spring" (default reveal direction/style); duration and delay are seconds (defaults 0.8 and 0); once (default true) plays the reveal a single time — set false to replay every time the element re-enters view. trigger defaults to "scrub" (the existing start/end scroll-scrub behavior) when omitted.
+9. site: optional page-level chrome, separate from scenes. theme sets background/text/accent colors and fontFamily as the page's default look (scene elements keep their own explicit colors, this doesn't override them). nav gives a sticky top bar with logoText and links — a link href of "#scene-<index>" (0-based, matching the scenes array order) smooth-scrolls to that scene, any other href opens in a new tab. footer renders text and links after the last scene. cursor is { style: "default" | "dot" | "glow", color? } for a custom pointer-follower (hidden on touch devices). loadingGate is { enabled, text?, minMs? } — a branded loading overlay shown only in exported/standalone playback (never in the studio editor), default minMs 600. Omit site entirely to leave the page with no chrome, matching the app's default appearance.
+10. integrations (form endpoint, reCAPTCHA key, Maps key) are user-managed in the studio's Integrations drawer — you must never add, change, or reference integration values in updateSchema calls; forms/maps read them automatically.
 
 Example — updateSchema args for a 2-scene pinned hero (background video, headline, parallaxing image) followed by a pin:false flow section with an appear-revealed card:
 {
@@ -211,7 +300,13 @@ Example — updateSchema args for a 2-scene pinned hero (background video, headl
 // AI-output firewall: the live/renderable set (type-drift law) plus the
 // still-recognized placeholder strings from src/types.ts. Anything outside
 // both is dropped rather than passed through to the client.
-const LIVE_ELEMENT_TYPES = new Set(["text", "cube", "glbObject", "image", "video", "marquee", "carousel", "counter", "svg", "grid", "gallery", "lottie"]);
+const LIVE_ELEMENT_TYPES = new Set(["text", "cube", "glbObject", "image", "video", "marquee", "carousel", "counter", "svg", "grid", "gallery", "lottie", "form", "map"]);
+const FORM_FIELD_KINDS = new Set(["text", "email", "textarea"]);
+const MIN_MAP_ZOOM = 1;
+const MAX_MAP_ZOOM = 20;
+const DEFAULT_MAP_LAT = 40.7128;
+const DEFAULT_MAP_LNG = -74.006;
+const DEFAULT_MAP_ZOOM = 12;
 const PLACEHOLDER_ELEMENT_TYPES = new Set([
   "environment",
   "object",
@@ -224,6 +319,10 @@ const PLACEHOLDER_ELEMENT_TYPES = new Set([
 
 function coerceNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function sanitizeElement(raw: unknown): Record<string, unknown> | null {
@@ -333,6 +432,39 @@ function sanitizeElement(raw: unknown): Record<string, unknown> | null {
     sanitized.playMode = source.playMode === "autoplay" ? "autoplay" : "scrub";
   }
 
+  if (type === "form") {
+    const fields = Array.isArray(source.fields)
+      ? source.fields
+          .filter((field): field is Record<string, unknown> => !!field && typeof field === "object")
+          .map(field => {
+            const sanitizedField: Record<string, unknown> = {
+              id: typeof field.id === "string" && field.id ? field.id : crypto.randomUUID(),
+              label: typeof field.label === "string" ? field.label : "",
+              kind: typeof field.kind === "string" && FORM_FIELD_KINDS.has(field.kind) ? field.kind : "text",
+            };
+            if (typeof field.required === "boolean") {
+              sanitizedField.required = field.required;
+            }
+            return sanitizedField;
+          })
+          .filter(field => typeof field.label === "string" && (field.label as string).trim().length > 0)
+      : [];
+    sanitized.fields =
+      fields.length > 0
+        ? fields
+        : [
+            { id: crypto.randomUUID(), label: "Name", kind: "text", required: true },
+            { id: crypto.randomUUID(), label: "Email", kind: "email", required: true },
+            { id: crypto.randomUUID(), label: "Message", kind: "textarea" },
+          ];
+  }
+
+  if (type === "map") {
+    sanitized.lat = clampNumber(coerceNumber(source.lat, DEFAULT_MAP_LAT), -90, 90);
+    sanitized.lng = clampNumber(coerceNumber(source.lng, DEFAULT_MAP_LNG), -180, 180);
+    sanitized.zoom = clampNumber(Math.round(coerceNumber(source.zoom, DEFAULT_MAP_ZOOM)), MIN_MAP_ZOOM, MAX_MAP_ZOOM);
+  }
+
   return sanitized;
 }
 
@@ -349,6 +481,90 @@ function sanitizeScene(raw: unknown): Record<string, unknown> | null {
     height: coerceNumber(source.height, 100),
     elements,
   };
+}
+
+const CURSOR_STYLES = new Set(["default", "dot", "glow"]);
+const MIN_LOADING_GATE_MS = 0;
+const MAX_LOADING_GATE_MS = 10000;
+
+// Mirrors src/schema/migrate.ts's safeSiteHref: site links render as raw
+// <a href> and ship into exported HTML, so javascript:/data: schemes are
+// XSS on the published site. Fragments and http/https/mailto/tel only.
+function safeSiteHref(href: string): string {
+  if (href.startsWith("#")) return href;
+  try {
+    const protocol = new URL(href).protocol;
+    return protocol === "http:" || protocol === "https:" || protocol === "mailto:" || protocol === "tel:" ? href : "";
+  } catch {
+    return "";
+  }
+}
+
+function sanitizeSiteLinks(raw: unknown): Record<string, unknown>[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const links = raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    .map(item => ({
+      label: typeof item.label === "string" ? item.label : "",
+      href: typeof item.href === "string" ? safeSiteHref(item.href) : "",
+    }))
+    .filter(link => link.label || link.href);
+  return links.length > 0 ? links : undefined;
+}
+
+// Mirrors src/schema/migrate.ts's migrateSite clamping rules (server stays
+// self-contained; the client's migrateSchema does a fuller pass on load).
+// Drops malformed/empty sub-objects rather than emitting placeholders, and
+// defaults cursor.style to "default" when the model hallucinates an
+// out-of-enum value.
+function sanitizeSite(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const source = raw as Record<string, unknown>;
+  const site: Record<string, unknown> = {};
+
+  if (source.theme && typeof source.theme === "object") {
+    site.theme = { ...(source.theme as Record<string, unknown>) };
+  }
+
+  if (source.nav && typeof source.nav === "object") {
+    const navSource = source.nav as Record<string, unknown>;
+    const nav: Record<string, unknown> = {};
+    if (typeof navSource.logoText === "string") nav.logoText = navSource.logoText;
+    const links = sanitizeSiteLinks(navSource.links);
+    if (links) nav.links = links;
+    site.nav = nav;
+  }
+
+  if (source.footer && typeof source.footer === "object") {
+    const footerSource = source.footer as Record<string, unknown>;
+    const footer: Record<string, unknown> = {};
+    if (typeof footerSource.text === "string") footer.text = footerSource.text;
+    const links = sanitizeSiteLinks(footerSource.links);
+    if (links) footer.links = links;
+    site.footer = footer;
+  }
+
+  if (source.cursor && typeof source.cursor === "object") {
+    const cursorSource = source.cursor as Record<string, unknown>;
+    const style = typeof cursorSource.style === "string" && CURSOR_STYLES.has(cursorSource.style) ? cursorSource.style : "default";
+    const cursor: Record<string, unknown> = { style };
+    if (typeof cursorSource.color === "string") cursor.color = cursorSource.color;
+    site.cursor = cursor;
+  }
+
+  if (source.loadingGate && typeof source.loadingGate === "object") {
+    const gateSource = source.loadingGate as Record<string, unknown>;
+    const loadingGate: Record<string, unknown> = {
+      enabled: typeof gateSource.enabled === "boolean" ? gateSource.enabled : false,
+    };
+    if (typeof gateSource.text === "string") loadingGate.text = gateSource.text;
+    if (typeof gateSource.minMs === "number") {
+      loadingGate.minMs = clampNumber(gateSource.minMs, MIN_LOADING_GATE_MS, MAX_LOADING_GATE_MS);
+    }
+    site.loadingGate = loadingGate;
+  }
+
+  return Object.keys(site).length > 0 ? site : undefined;
 }
 
 /**
@@ -369,7 +585,21 @@ export function sanitizeSchema(raw: unknown): unknown {
     .map(sanitizeScene)
     .filter((scene): scene is Record<string, unknown> => scene !== null);
 
-  return { ...source, scenes };
+  const result: Record<string, unknown> = { ...source, scenes };
+  const site = sanitizeSite(source.site);
+  if (site !== undefined) {
+    result.site = site;
+  } else {
+    delete result.site;
+  }
+
+  // integrations are user-managed in the studio's Integrations drawer
+  // (src/components/IntegrationsDrawer.tsx) — the AI must never see or emit
+  // them. Strip whatever the model hallucinated here; runChat reattaches the
+  // caller's real integrations from currentSchema below.
+  delete result.integrations;
+
+  return result;
 }
 
 let cachedAi: GoogleGenAI | null = null;
@@ -414,6 +644,17 @@ export async function runChat({ message, currentSchema, history }: ChatRequestBo
     const call = functionCalls[0];
     if (call.name === "updateSchema") {
       newSchema = sanitizeSchema(call.args);
+    }
+  }
+
+  // The AI never sees or controls integrations (user-managed public site
+  // keys — see the Integrations drawer). Whatever the model returned always
+  // gets the caller's existing integrations reattached verbatim, so a chat
+  // turn can never add, change, or drop them.
+  if (newSchema && typeof newSchema === "object" && currentSchema && typeof currentSchema === "object") {
+    const existingIntegrations = (currentSchema as Record<string, unknown>).integrations;
+    if (existingIntegrations !== undefined) {
+      (newSchema as Record<string, unknown>).integrations = existingIntegrations;
     }
   }
 

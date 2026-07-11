@@ -1,9 +1,10 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Type, Box, Package, Image as ImageIcon, Video, MoveHorizontal, GalleryHorizontal, Hash, PenTool, LayoutGrid, Images, Sparkles } from 'lucide-react';
+import { Type, Box, Package, Image as ImageIcon, Video, MoveHorizontal, GalleryHorizontal, Hash, PenTool, LayoutGrid, Images, Sparkles, ClipboardList, MapPin } from 'lucide-react';
 import type gsapType from 'gsap';
 import type { ScrollTrigger as ScrollTriggerType } from 'gsap/ScrollTrigger';
-import { ElementType, SceneElement, TextElement, CubeElement, GlbObjectElement, ImageElement, VideoElement, MarqueeElement, CarouselElement, CounterElement, SvgElement, GridElement, GalleryElement, LottieElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../../types';
+import { ElementType, SceneElement, TextElement, CubeElement, GlbObjectElement, ImageElement, VideoElement, MarqueeElement, CarouselElement, CounterElement, SvgElement, GridElement, GalleryElement, LottieElement, FormElement, MapElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../../types';
+import type { ProjectIntegrations } from '../../types';
 import type { FieldSpec } from './specs';
 import { TextElementView } from './TextElementView';
 import { CubeElementView } from './CubeElementView';
@@ -17,6 +18,8 @@ import { SvgElementView } from './SvgElementView';
 import { GridElementView } from './GridElementView';
 import { GalleryElementView } from './GalleryElementView';
 import { LottieElementView } from './LottieElementView';
+import { FormElementView } from './FormElementView';
+import { MapElementView } from './MapElementView';
 
 export type ScenePolishControls = {
   bloomIntensity: number;
@@ -42,6 +45,9 @@ export interface DomRendererCtx {
   container: HTMLDivElement;
   sceneStartPx: number;
   sceneHeightPx: number;
+  // Threaded from PreviewPanel's schema.integrations (see the form/map
+  // adapters below) — additive; existing adapters/renderers ignore it.
+  integrations?: ProjectIntegrations;
 }
 
 export interface R3fRendererCtx {
@@ -187,6 +193,30 @@ const LottieDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }>
     container={ctx.container}
     sceneStartPx={ctx.sceneStartPx}
     sceneHeightPx={ctx.sceneHeightPx}
+  />
+);
+
+const FormDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
+  <FormElementView
+    element={element}
+    gsapInstance={ctx.gsapInstance}
+    scrollTrigger={ctx.scrollTrigger}
+    container={ctx.container}
+    sceneStartPx={ctx.sceneStartPx}
+    sceneHeightPx={ctx.sceneHeightPx}
+    integrations={ctx.integrations}
+  />
+);
+
+const MapDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
+  <MapElementView
+    element={element}
+    gsapInstance={ctx.gsapInstance}
+    scrollTrigger={ctx.scrollTrigger}
+    container={ctx.container}
+    sceneStartPx={ctx.sceneStartPx}
+    sceneHeightPx={ctx.sceneHeightPx}
+    integrations={ctx.integrations}
   />
 );
 
@@ -564,6 +594,82 @@ export const elementRegistry: Partial<Record<ElementType, ElementDefinition>> = 
       src: '/lottie/pulse.json',
       playMode: 'scrub',
       loop: true,
+      start: 0,
+      end: 1,
+      startY: 0,
+      endY: 0,
+      startOpacity: 1,
+      endOpacity: 1,
+    }),
+  },
+  form: {
+    type: 'form',
+    layer: 'dom',
+    label: 'Form',
+    icon: ClipboardList,
+    Dom: FormDomAdapter,
+    interactive: true,
+    fields: [
+      { key: 'title', label: 'Title', kind: 'text' },
+      {
+        key: 'fields',
+        label: 'Fields',
+        kind: 'list',
+        itemFields: [
+          { key: 'label', label: 'Label', kind: 'text' },
+          {
+            key: 'kind',
+            label: 'Kind',
+            kind: 'select',
+            options: [
+              { value: 'text', label: 'Text' },
+              { value: 'email', label: 'Email' },
+              { value: 'textarea', label: 'Textarea' },
+            ],
+          },
+          { key: 'required', label: 'Required', kind: 'toggle' },
+        ],
+      },
+      { key: 'submitLabel', label: 'Submit Label', kind: 'text' },
+      { key: 'successMessage', label: 'Success Message', kind: 'text' },
+    ],
+    create: (): FormElement => ({
+      id: crypto.randomUUID(),
+      type: 'form',
+      title: 'Get in touch',
+      fields: [
+        { id: crypto.randomUUID(), label: 'Name', kind: 'text', required: true },
+        { id: crypto.randomUUID(), label: 'Email', kind: 'email', required: true },
+        { id: crypto.randomUUID(), label: 'Message', kind: 'textarea' },
+      ],
+      submitLabel: 'Send',
+      start: 0,
+      end: 1,
+      startY: 0,
+      endY: 0,
+      startOpacity: 1,
+      endOpacity: 1,
+    }),
+  },
+  map: {
+    type: 'map',
+    layer: 'dom',
+    label: 'Map',
+    icon: MapPin,
+    Dom: MapDomAdapter,
+    interactive: true,
+    fields: [
+      { key: 'lat', label: 'Latitude', kind: 'number', step: 0.0001 },
+      { key: 'lng', label: 'Longitude', kind: 'number', step: 0.0001 },
+      { key: 'zoom', label: 'Zoom', kind: 'number', min: 1, max: 20, step: 1 },
+      { key: 'markerLabel', label: 'Marker Label', kind: 'text' },
+    ],
+    create: (): MapElement => ({
+      id: crypto.randomUUID(),
+      type: 'map',
+      lat: 40.7128,
+      lng: -74.006,
+      zoom: 12,
       start: 0,
       end: 1,
       startY: 0,
