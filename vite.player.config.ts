@@ -1,6 +1,26 @@
+import fs from 'fs';
+import path from 'path';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, Plugin } from 'vite';
+
+// Copies lottie-web's prebuilt SVG-only runtime to dist/player/lottie.js
+// after the player bundle is written. This is the ONLY way lottie-web's code
+// ships in the player build — src/components/elements/lottieLoader.ts's
+// import is aliased below to a stub (src/player/lottieStub.ts) so the
+// library itself never gets inlined into player.js. The exported HTML shell
+// (src/export/exportSite.ts) loads this file as a same-origin <script> before
+// player.js, so window.lottie exists when the player's LottieElementView runs.
+function copyLottiePlayerRuntime(): Plugin {
+  return {
+    name: 'copy-lottie-player-runtime',
+    closeBundle() {
+      const src = path.resolve(__dirname, 'node_modules/lottie-web/build/player/lottie_light.min.js');
+      const dest = path.resolve(__dirname, 'dist/player/lottie.js');
+      fs.copyFileSync(src, dest);
+    },
+  };
+}
 
 // Standalone build for the exported-site runtime: bundles src/player/entry.tsx
 // into a single self-contained script (+ one CSS file) under dist/player, with
@@ -9,7 +29,15 @@ import { defineConfig } from 'vite';
 // rollupOptions.input on the main build) so its output stays isolated from the
 // SPA's index.html/asset graph.
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), copyLottiePlayerRuntime()],
+  resolve: {
+    alias: {
+      // Player-purity: keep lottie-web itself out of the player IIFE (see
+      // copyLottiePlayerRuntime above for how the real runtime ships instead).
+      'lottie-web/build/player/lottie_light': path.resolve(__dirname, 'src/player/lottieStub.ts'),
+      'lottie-web': path.resolve(__dirname, 'src/player/lottieStub.ts'),
+    },
+  },
   build: {
     outDir: 'dist/player',
     emptyOutDir: true,

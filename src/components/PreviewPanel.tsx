@@ -591,6 +591,23 @@ function SceneDOMObserver({
           />
         );
       })}
+      {layout.heightPx > 0 && scene.elements.filter(el => el.type === 'lottie').map(el => {
+        const LottieDom = elementRegistry.lottie?.Dom;
+        if (!LottieDom) return null;
+        return (
+          <LottieDom
+            key={el.id}
+            element={el}
+            ctx={{
+              gsapInstance,
+              scrollTrigger,
+              container,
+              sceneStartPx: layout.startPx,
+              sceneHeightPx: layout.heightPx,
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

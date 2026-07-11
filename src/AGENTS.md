@@ -36,3 +36,4 @@ React app source for Animation Studio Pro: the studio app (`App.tsx`, served at 
 ## Child DOX Index
 
 - `components/AGENTS.md`: editor, preview, and chat component contracts.
+- `export/AGENTS.md`: one-click HTML export (`exportSite.ts`) contracts.

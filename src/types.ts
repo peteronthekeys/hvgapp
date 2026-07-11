@@ -5,13 +5,13 @@ export const DEFAULT_GLB_OBJECT_MODEL_PATH = '/models/scroll-orb.glb';
 export const SCHEMA_VERSION = 2;
 
 // 'text', 'cube', 'glbObject', 'image', 'video', 'marquee', 'carousel',
-// 'counter', 'svg', 'grid', and 'gallery' (11) are the only types with a real
-// renderer (see PreviewPanel.tsx) and the only types the AI can emit (see
-// server/gemini.ts updateSchema). The rest are editor-only placeholders:
-// creatable/draggable in EditorPanel.tsx but invisible in the preview. Adding
-// a new type to this union does not make it render or make the AI aware of
-// it — follow .claude/skills/new-element-type/SKILL.md.
-export type ElementType = 'text' | 'cube' | 'glbObject' | 'image' | 'video' | 'marquee' | 'carousel' | 'counter' | 'svg' | 'grid' | 'gallery' | 'environment' | 'object' | 'character' | 'action' | 'motion' | 'font' | 'component';
+// 'counter', 'svg', 'grid', 'gallery', and 'lottie' (12) are the only types
+// with a real renderer (see PreviewPanel.tsx) and the only types the AI can
+// emit (see server/gemini.ts updateSchema). The rest are editor-only
+// placeholders: creatable/draggable in EditorPanel.tsx but invisible in the
+// preview. Adding a new type to this union does not make it render or make
+// the AI aware of it — follow .claude/skills/new-element-type/SKILL.md.
+export type ElementType = 'text' | 'cube' | 'glbObject' | 'image' | 'video' | 'marquee' | 'carousel' | 'counter' | 'svg' | 'grid' | 'gallery' | 'lottie' | 'environment' | 'object' | 'character' | 'action' | 'motion' | 'font' | 'component';
 
 // Positioning for DOM element renderers, layered on top of the scroll-scrub
 // animation. All fields are optional; absence means centered default at
@@ -187,11 +187,24 @@ export interface GalleryElement extends BaseElement {
   lightbox?: boolean; // default true
 }
 
+// Lottie/After Effects JSON animation (bodymovin export) — see
+// LottieElementView.tsx and elements/lottieLoader.ts for the runtime.
+// 'scrub' (default) ties the animation's frame to the element's start/end
+// scroll window, mirroring CounterElementView/SvgElementView's scrub
+// pattern. 'autoplay' plays once (or loops per `loop`) when the element
+// enters the viewport, detected via IntersectionObserver like useAppear.
+export interface LottieElement extends BaseElement {
+  type: 'lottie';
+  src: string; // URL to a .json Lottie animation
+  playMode: 'scrub' | 'autoplay';
+  loop?: boolean; // autoplay mode only; default true
+}
+
 export interface GenericElement extends BaseElement {
   type: 'environment' | 'object' | 'character' | 'action' | 'motion' | 'font' | 'component';
 }
 
-export type SceneElement = TextElement | CubeElement | GlbObjectElement | ImageElement | VideoElement | MarqueeElement | CarouselElement | CounterElement | SvgElement | GridElement | GalleryElement | GenericElement;
+export type SceneElement = TextElement | CubeElement | GlbObjectElement | ImageElement | VideoElement | MarqueeElement | CarouselElement | CounterElement | SvgElement | GridElement | GalleryElement | LottieElement | GenericElement;
 
 export interface Scene {
   id: string;

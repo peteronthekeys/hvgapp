@@ -124,7 +124,7 @@ function SvgDraw({
       timeline.scrollTrigger?.kill();
       timeline.kill();
     };
-  }, [svgEl, gsapInstance, container, sceneStartPx, sceneHeightPx, paths]);
+  }, [svgEl, gsapInstance, container, sceneStartPx, sceneHeightPx]);
 
   return (
     <svg ref={svgRef} viewBox={svgEl.viewBox ?? DEFAULT_VIEW_BOX} fill="none" className={`${sizeClass} block`}>

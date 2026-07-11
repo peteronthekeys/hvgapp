@@ -124,6 +124,7 @@ function CounterValue({
         tween = gsapInstance.to(proxy, {
           value: counter.to,
           duration,
+          delay: counter.appear?.delay ?? 0,
           ease: 'power2.out',
           onUpdate: () => {
             target.textContent = formatCounter(counter, proxy.value);

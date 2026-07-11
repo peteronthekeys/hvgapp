@@ -64,6 +64,13 @@ function slugify(value: string): string {
   return slug || 'export';
 }
 
+// True when any scene has a lottie element — gates fetching/inlining
+// dist/player/lottie.js so exports with no lottie usage stay byte-identical
+// to pre-Wave-4.3 output.
+function schemaHasLottie(schema: ProjectSchema): boolean {
+  return schema.scenes.some(scene => scene.elements.some(el => el.type === 'lottie'));
+}
+
 async function fetchPlayerAsset(path: string): Promise<string> {
   const response = await fetch(path);
   if (!response.ok) {
@@ -76,10 +83,15 @@ async function fetchPlayerAsset(path: string): Promise<string> {
 // (asset-URL-rewritten) schema into one HTML document, and downloads it as a
 // Blob. No network calls beyond the same-origin player fetch.
 export async function exportSite(schema: ProjectSchema, title = 'My Scroll Site'): Promise<void> {
-  const [playerJs, playerCss] = await Promise.all([
+  const hasLottie = schemaHasLottie(schema);
+  const [playerJs, playerCss, lottieJs] = await Promise.all([
     fetchPlayerAsset('/player/player.js'),
     fetchPlayerAsset('/player/player.css'),
+    hasLottie ? fetchPlayerAsset('/player/lottie.js') : Promise.resolve(''),
   ]);
+  // Loaded as its own <script> ahead of player.js so window.lottie exists
+  // before LottieElementView's loadLottie() (elements/lottieLoader.ts) runs.
+  const lottieScriptTag = hasLottie ? `<script>${lottieJs}</script>\n` : '';
 
   const absolutized = absolutizeAssetUrls(schema);
   const projectJson = JSON.stringify(absolutized)
@@ -101,7 +113,7 @@ export async function exportSite(schema: ProjectSchema, title = 'My Scroll Site'
 <body>
 <div id="asp-root"></div>
 <script>window.__ASP_PROJECT__ = ${projectJson};</script>
-<script>${playerJs}</script>
+${lottieScriptTag}<script>${playerJs}</script>
 </body>
 </html>
 `;

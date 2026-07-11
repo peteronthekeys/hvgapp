@@ -43,7 +43,7 @@ const updateSchemaDeclaration = {
                 type: Type.OBJECT,
                 properties: {
                   id: { type: Type.STRING },
-                  type: { type: Type.STRING, enum: ["text", "cube", "glbObject", "image", "video", "marquee", "carousel", "counter", "svg", "grid", "gallery"] },
+                  type: { type: Type.STRING, enum: ["text", "cube", "glbObject", "image", "video", "marquee", "carousel", "counter", "svg", "grid", "gallery", "lottie"] },
                   content: { type: Type.STRING },
                   splitMode: { type: Type.STRING, enum: ["none", "chars", "words", "lines"] },
                   staggerEach: { type: Type.NUMBER },
@@ -112,6 +112,7 @@ const updateSchemaDeclaration = {
                     },
                   },
                   lightbox: { type: Type.BOOLEAN },
+                  playMode: { type: Type.STRING, enum: ["scrub", "autoplay"] },
                   trigger: { type: Type.STRING, enum: ["scrub", "appear"] },
                   appear: {
                     type: Type.OBJECT,
@@ -175,6 +176,7 @@ Rules:
    - svg: line-art that draws itself as you scroll. Required: paths (array of SVG path "d" strings). Optional: viewBox (default "0 0 100 100"), strokeColor (default "#2dd4bf"), strokeWidth (default 2). Use for underlines, diagrams, decorative strokes.
    - grid: responsive card grid. Required: cards [{id,title,body?,imageSrc?}]. Use for feature grids, service lists, team cards. Optional: columns (1-6, default 3).
    - gallery: image grid with a click-to-zoom lightbox. Required: images [{id,src,alt?}]. Use for photo grids, portfolios, product shots. Optional: columns (1-6, default 3), lightbox (default true).
+   - lottie: a Lottie/After Effects JSON animation. Required: src (URL to a .json file), playMode ("scrub" | "autoplay"). Optional: loop (autoplay mode only, default true). "scrub" ties animation frames to scroll; "autoplay" plays once the element enters the viewport. Use for icon animations, illustrated micro-interactions.
 5. If creating new elements, give them a unique UUID for the id.
 6. Every element may include an optional layout: { x, y, width, anchor, z }. x/y/width are percentages (0-100); anchor is "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" (default "center"). Omit layout to keep an element centered at its default size — for a background video, omitting layout makes it fill the whole scene.
 7. A scene may include pin: boolean. Omit it (or set true) for a pinned scrubbed set-piece — the scene holds on screen while its elements' start/end scrub tweens play, the current default. Set pin: false for a normal flowing website section whose content should scroll past like a regular page section instead of holding.
@@ -209,7 +211,7 @@ Example — updateSchema args for a 2-scene pinned hero (background video, headl
 // AI-output firewall: the live/renderable set (type-drift law) plus the
 // still-recognized placeholder strings from src/types.ts. Anything outside
 // both is dropped rather than passed through to the client.
-const LIVE_ELEMENT_TYPES = new Set(["text", "cube", "glbObject", "image", "video", "marquee", "carousel", "counter", "svg", "grid", "gallery"]);
+const LIVE_ELEMENT_TYPES = new Set(["text", "cube", "glbObject", "image", "video", "marquee", "carousel", "counter", "svg", "grid", "gallery", "lottie"]);
 const PLACEHOLDER_ELEMENT_TYPES = new Set([
   "environment",
   "object",
@@ -229,6 +231,9 @@ function sanitizeElement(raw: unknown): Record<string, unknown> | null {
   const source = raw as Record<string, unknown>;
   const type = typeof source.type === "string" ? source.type : "";
   if (!LIVE_ELEMENT_TYPES.has(type) && !PLACEHOLDER_ELEMENT_TYPES.has(type)) return null;
+  // lottie has no fallback content without a src — drop the element rather
+  // than emit an empty animation the AI never actually specified.
+  if (type === "lottie" && (typeof source.src !== "string" || !source.src.trim())) return null;
 
   const sanitized: Record<string, unknown> = {
     ...source,
@@ -321,6 +326,11 @@ function sanitizeElement(raw: unknown): Record<string, unknown> | null {
     if (typeof source.columns === "number") {
       sanitized.columns = Math.min(6, Math.max(1, Math.round(source.columns)));
     }
+  }
+
+  if (type === "lottie") {
+    sanitized.src = (source.src as string).trim();
+    sanitized.playMode = source.playMode === "autoplay" ? "autoplay" : "scrub";
   }
 
   return sanitized;

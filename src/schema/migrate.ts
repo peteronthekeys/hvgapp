@@ -155,7 +155,7 @@ function migrateElement(raw: unknown): SceneElement {
     migrated.layout = layout;
   }
 
-  if (source.type === 'image' || source.type === 'video') {
+  if (source.type === 'image' || source.type === 'video' || source.type === 'lottie') {
     migrated.src = typeof source.src === 'string' ? source.src : '';
   }
   if (source.type === 'image') {
@@ -163,6 +163,10 @@ function migrateElement(raw: unknown): SceneElement {
   }
   if (source.type === 'video') {
     migrated.mode = source.mode === 'clickToPlay' ? 'clickToPlay' : 'background';
+  }
+  if (source.type === 'lottie') {
+    migrated.playMode = source.playMode === 'autoplay' ? 'autoplay' : 'scrub';
+    migrated.loop = typeof source.loop === 'boolean' ? source.loop : true;
   }
   if (source.type === 'marquee') {
     migrated.items = migrateMarqueeItems(source.items);

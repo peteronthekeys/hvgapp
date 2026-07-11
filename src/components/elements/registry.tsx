@@ -1,9 +1,9 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Type, Box, Package, Image as ImageIcon, Video, MoveHorizontal, GalleryHorizontal, Hash, PenTool, LayoutGrid, Images } from 'lucide-react';
+import { Type, Box, Package, Image as ImageIcon, Video, MoveHorizontal, GalleryHorizontal, Hash, PenTool, LayoutGrid, Images, Sparkles } from 'lucide-react';
 import type gsapType from 'gsap';
 import type { ScrollTrigger as ScrollTriggerType } from 'gsap/ScrollTrigger';
-import { ElementType, SceneElement, TextElement, CubeElement, GlbObjectElement, ImageElement, VideoElement, MarqueeElement, CarouselElement, CounterElement, SvgElement, GridElement, GalleryElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../../types';
+import { ElementType, SceneElement, TextElement, CubeElement, GlbObjectElement, ImageElement, VideoElement, MarqueeElement, CarouselElement, CounterElement, SvgElement, GridElement, GalleryElement, LottieElement, DEFAULT_GLB_OBJECT_MODEL_PATH } from '../../types';
 import type { FieldSpec } from './specs';
 import { TextElementView } from './TextElementView';
 import { CubeElementView } from './CubeElementView';
@@ -16,6 +16,7 @@ import { CounterElementView } from './CounterElementView';
 import { SvgElementView } from './SvgElementView';
 import { GridElementView } from './GridElementView';
 import { GalleryElementView } from './GalleryElementView';
+import { LottieElementView } from './LottieElementView';
 
 export type ScenePolishControls = {
   bloomIntensity: number;
@@ -169,6 +170,17 @@ const GridDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> =
 
 const GalleryDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
   <GalleryElementView
+    element={element}
+    gsapInstance={ctx.gsapInstance}
+    scrollTrigger={ctx.scrollTrigger}
+    container={ctx.container}
+    sceneStartPx={ctx.sceneStartPx}
+    sceneHeightPx={ctx.sceneHeightPx}
+  />
+);
+
+const LottieDomAdapter: React.FC<{ element: SceneElement; ctx: DomRendererCtx }> = ({ element, ctx }) => (
+  <LottieElementView
     element={element}
     gsapInstance={ctx.gsapInstance}
     scrollTrigger={ctx.scrollTrigger}
@@ -519,6 +531,39 @@ export const elementRegistry: Partial<Record<ElementType, ElementDefinition>> = 
         { id: crypto.randomUUID(), src: 'https://picsum.photos/seed/gallery2/800/800' },
         { id: crypto.randomUUID(), src: 'https://picsum.photos/seed/gallery3/800/800' },
       ],
+      start: 0,
+      end: 1,
+      startY: 0,
+      endY: 0,
+      startOpacity: 1,
+      endOpacity: 1,
+    }),
+  },
+  lottie: {
+    type: 'lottie',
+    layer: 'dom',
+    label: 'Lottie',
+    icon: Sparkles,
+    Dom: LottieDomAdapter,
+    fields: [
+      { key: 'src', label: 'Lottie JSON URL', kind: 'url', placeholder: '/lottie/pulse.json' },
+      {
+        key: 'playMode',
+        label: 'Play Mode',
+        kind: 'select',
+        options: [
+          { value: 'scrub', label: 'Scrub' },
+          { value: 'autoplay', label: 'Autoplay' },
+        ],
+      },
+      { key: 'loop', label: 'Loop (autoplay)', kind: 'toggle' },
+    ],
+    create: (): LottieElement => ({
+      id: crypto.randomUUID(),
+      type: 'lottie',
+      src: '/lottie/pulse.json',
+      playMode: 'scrub',
+      loop: true,
       start: 0,
       end: 1,
       startY: 0,

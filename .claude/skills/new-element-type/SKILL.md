@@ -27,6 +27,12 @@ the same change:
    rule — never read scrollTop). Registry files must not import editor/chat/App
    modules (they are bundled into the standalone player).
 
+   **Also add an explicit render block in `src/components/PreviewPanel.tsx`**:
+   it does NOT generically iterate the registry — each type needs its own
+   `scene.elements.filter(el => el.type === '<type>').map(...)` block (this is
+   the "preserve explicit type guards" contract). A registry entry without a
+   PreviewPanel block silently renders nowhere.
+
 3. **`server/gemini.ts`** — add the value to the `updateSchema` declaration's
    `type` enum, any new properties to the element item schema, and a cheatsheet
    line in the system prompt (what the type is, required fields, when to use).
